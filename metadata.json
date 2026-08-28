@@ -1,0 +1,6 @@
+{
+  "name": "OmniPOS Enterprise Platform",
+  "description": "Enterprise Cloud-Native Restaurant POS, KDS, Multi-Tenant SaaS with Offline-First Sync, ZATCA Phase 2 E-Invoicing, Autonomous AI Agents, Voice/Vision AI, and Digital Twin Simulation",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
