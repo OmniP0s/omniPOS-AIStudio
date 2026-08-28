@@ -1366,7 +1366,7 @@ export const EnterpriseOperationsV2Center: React.FC<EnterpriseOperationsV2Center
                         {node.status}
                       </span>
                     </div>
-                    <div className="text-xs font-bold text-slate-200 mb-1">{isArabic ? node.regionNameAr : node.nameEn || node.regionNameEn}</div>
+                    <div className="text-xs font-bold text-slate-200 mb-1">{isArabic ? node.regionNameAr : node.regionNameEn}</div>
                     <div className="text-[10px] text-slate-400 mb-3">{node.datacenter}</div>
                     <div className="space-y-1 text-[10px] font-mono text-slate-300">
                       <div className="flex justify-between">
