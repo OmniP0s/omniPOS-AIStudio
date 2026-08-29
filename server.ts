@@ -11,6 +11,7 @@ type AuthenticatedUser = {
   id: string;
   tenantId: string;
   roles: string[];
+  attributes: Record<string, string | number | boolean | string[]>;
 };
 
 type AuthTokenPayload = {
@@ -18,6 +19,7 @@ type AuthTokenPayload = {
   tenantId: string;
   roles: string[];
   exp: number;
+  attributes?: Record<string, string | number | boolean | string[]>;
 };
 
 type AuthorizationDecision = {
@@ -31,6 +33,7 @@ type RouteAuthorizationPolicy = {
   action: string;
   resource: string;
   allowedRoles: string[];
+  requireTenant: boolean;
 };
 
 declare global {
@@ -44,16 +47,16 @@ declare global {
 
 const PUBLIC_API_ROUTES = new Set(["GET /api/health"]);
 const AUTH_TOKEN_PARTS = 2;
-const DEFAULT_PRIVATE_API_POLICY: RouteAuthorizationPolicy = { action: "access", resource: "private-api", allowedRoles: ["admin"] };
+const DEFAULT_PRIVATE_API_POLICY: RouteAuthorizationPolicy = { action: "access", resource: "private-api", allowedRoles: ["admin"], requireTenant: true };
 const ROUTE_AUTHORIZATION_POLICIES: Array<{ method: string; pathPrefix: string; policy: RouteAuthorizationPolicy }> = [
-  { method: "GET", pathPrefix: "/api/metrics", policy: { action: "read", resource: "platform-metrics", allowedRoles: ["admin", "ops"] } },
-  { method: "POST", pathPrefix: "/api/ai", policy: { action: "invoke", resource: "ai-services", allowedRoles: ["admin", "ai_operator"] } },
-  { method: "POST", pathPrefix: "/api/ai-apps", policy: { action: "invoke", resource: "ai-applications", allowedRoles: ["admin", "ai_operator"] } },
-  { method: "POST", pathPrefix: "/api/ai-agents", policy: { action: "invoke", resource: "ai-agents", allowedRoles: ["admin", "ai_operator"] } },
-  { method: "POST", pathPrefix: "/api/chat", policy: { action: "invoke", resource: "ai-chat", allowedRoles: ["admin", "ai_operator", "cashier"] } },
-  { method: "POST", pathPrefix: "/api/generate", policy: { action: "invoke", resource: "content-generation", allowedRoles: ["admin", "ai_operator", "manager"] } },
-  { method: "POST", pathPrefix: "/api/sync", policy: { action: "write", resource: "sync-outbox", allowedRoles: ["admin", "system"] } },
-  { method: "POST", pathPrefix: "/api/zatca", policy: { action: "write", resource: "zatca-compliance", allowedRoles: ["admin", "compliance"] } },
+  { method: "GET", pathPrefix: "/api/metrics", policy: { action: "read", resource: "platform-metrics", allowedRoles: ["admin", "ops"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/ai", policy: { action: "invoke", resource: "ai-services", allowedRoles: ["admin", "ai_operator"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/ai-apps", policy: { action: "invoke", resource: "ai-applications", allowedRoles: ["admin", "ai_operator"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/ai-agents", policy: { action: "invoke", resource: "ai-agents", allowedRoles: ["admin", "ai_operator"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/chat", policy: { action: "invoke", resource: "ai-chat", allowedRoles: ["admin", "ai_operator", "cashier"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/generate", policy: { action: "invoke", resource: "content-generation", allowedRoles: ["admin", "ai_operator", "manager"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/sync", policy: { action: "write", resource: "sync-outbox", allowedRoles: ["admin", "system"], requireTenant: true } },
+  { method: "POST", pathPrefix: "/api/zatca", policy: { action: "write", resource: "zatca-compliance", allowedRoles: ["admin", "compliance"], requireTenant: true } },
 ];
 
 function isPublicApiRoute(req: Request): boolean {
@@ -108,6 +111,7 @@ function verifyAuthToken(token: string, secret: string): AuthenticatedUser | nul
     id: payload.sub,
     tenantId: payload.tenantId,
     roles: payload.roles.filter((role) => typeof role === "string" && role.trim().length > 0),
+    attributes: payload.attributes ?? {},
   };
 }
 
@@ -124,6 +128,15 @@ function evaluateAuthorization(req: Request): AuthorizationDecision {
       action: policy.action,
       resource: policy.resource,
       reason: "AUTHENTICATED_IDENTITY_REQUIRED",
+    };
+  }
+
+  if (policy.requireTenant && !req.user.tenantId.startsWith("TENANT-")) {
+    return {
+      allowed: false,
+      action: policy.action,
+      resource: policy.resource,
+      reason: "TENANT_ATTRIBUTE_REQUIRED",
     };
   }
 
