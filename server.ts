@@ -1,10 +1,57 @@
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+type AuthenticatedUser = {
+  id: string;
+  tenantId: string;
+  roles: string[];
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser;
+    }
+  }
+}
+
+const PUBLIC_API_ROUTES = new Set(["GET /api/health"]);
+
+function isPublicApiRoute(req: Request): boolean {
+  return PUBLIC_API_ROUTES.has(`${req.method} ${req.path}`);
+}
+
+function authenticateApiRequest(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api") || isPublicApiRoute(req)) {
+    return next();
+  }
+
+  const expectedToken = process.env.API_AUTH_TOKEN;
+  const authHeader = req.header("authorization") || "";
+  const [scheme, token] = authHeader.split(" ");
+
+  if (!expectedToken || scheme !== "Bearer" || token !== expectedToken) {
+    return res.status(401).json({
+      error: {
+        code: "UNAUTHENTICATED",
+        message: "Authentication is required for this endpoint.",
+      },
+    });
+  }
+
+  req.user = {
+    id: req.header("x-user-id") || "service-account",
+    tenantId: req.header("x-tenant-id") || "TENANT-DEFAULT-01",
+    roles: (req.header("x-user-roles") || "admin").split(",").map((role) => role.trim()).filter(Boolean),
+  };
+
+  return next();
+}
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -28,6 +75,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: "10mb" }));
+  app.use(authenticateApiRequest);
 
   // Health check
   app.get("/api/health", (_req: Request, res: Response) => {
