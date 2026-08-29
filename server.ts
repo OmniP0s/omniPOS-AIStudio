@@ -342,6 +342,17 @@ function applySecurityHeaders(_req: Request, res: Response, next: NextFunction) 
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   res.setHeader("X-DNS-Prefetch-Control", "off");
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; "));
   return next();
 }
 
