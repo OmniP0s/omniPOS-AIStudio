@@ -30,6 +30,7 @@ type AuthorizationDecision = {
 type RouteAuthorizationPolicy = {
   action: string;
   resource: string;
+  allowedRoles: string[];
 };
 
 declare global {
@@ -43,16 +44,16 @@ declare global {
 
 const PUBLIC_API_ROUTES = new Set(["GET /api/health"]);
 const AUTH_TOKEN_PARTS = 2;
-const DEFAULT_PRIVATE_API_POLICY: RouteAuthorizationPolicy = { action: "access", resource: "private-api" };
+const DEFAULT_PRIVATE_API_POLICY: RouteAuthorizationPolicy = { action: "access", resource: "private-api", allowedRoles: ["admin"] };
 const ROUTE_AUTHORIZATION_POLICIES: Array<{ method: string; pathPrefix: string; policy: RouteAuthorizationPolicy }> = [
-  { method: "GET", pathPrefix: "/api/metrics", policy: { action: "read", resource: "platform-metrics" } },
-  { method: "POST", pathPrefix: "/api/ai", policy: { action: "invoke", resource: "ai-services" } },
-  { method: "POST", pathPrefix: "/api/ai-apps", policy: { action: "invoke", resource: "ai-applications" } },
-  { method: "POST", pathPrefix: "/api/ai-agents", policy: { action: "invoke", resource: "ai-agents" } },
-  { method: "POST", pathPrefix: "/api/chat", policy: { action: "invoke", resource: "ai-chat" } },
-  { method: "POST", pathPrefix: "/api/generate", policy: { action: "invoke", resource: "content-generation" } },
-  { method: "POST", pathPrefix: "/api/sync", policy: { action: "write", resource: "sync-outbox" } },
-  { method: "POST", pathPrefix: "/api/zatca", policy: { action: "write", resource: "zatca-compliance" } },
+  { method: "GET", pathPrefix: "/api/metrics", policy: { action: "read", resource: "platform-metrics", allowedRoles: ["admin", "ops"] } },
+  { method: "POST", pathPrefix: "/api/ai", policy: { action: "invoke", resource: "ai-services", allowedRoles: ["admin", "ai_operator"] } },
+  { method: "POST", pathPrefix: "/api/ai-apps", policy: { action: "invoke", resource: "ai-applications", allowedRoles: ["admin", "ai_operator"] } },
+  { method: "POST", pathPrefix: "/api/ai-agents", policy: { action: "invoke", resource: "ai-agents", allowedRoles: ["admin", "ai_operator"] } },
+  { method: "POST", pathPrefix: "/api/chat", policy: { action: "invoke", resource: "ai-chat", allowedRoles: ["admin", "ai_operator", "cashier"] } },
+  { method: "POST", pathPrefix: "/api/generate", policy: { action: "invoke", resource: "content-generation", allowedRoles: ["admin", "ai_operator", "manager"] } },
+  { method: "POST", pathPrefix: "/api/sync", policy: { action: "write", resource: "sync-outbox", allowedRoles: ["admin", "system"] } },
+  { method: "POST", pathPrefix: "/api/zatca", policy: { action: "write", resource: "zatca-compliance", allowedRoles: ["admin", "compliance"] } },
 ];
 
 function isPublicApiRoute(req: Request): boolean {
@@ -123,6 +124,18 @@ function evaluateAuthorization(req: Request): AuthorizationDecision {
       action: policy.action,
       resource: policy.resource,
       reason: "AUTHENTICATED_IDENTITY_REQUIRED",
+    };
+  }
+
+  const principalRoles = new Set(req.user.roles.map((role) => role.toLowerCase()));
+  const hasAllowedRole = policy.allowedRoles.some((role) => principalRoles.has(role.toLowerCase()));
+
+  if (!hasAllowedRole) {
+    return {
+      allowed: false,
+      action: policy.action,
+      resource: policy.resource,
+      reason: "REQUIRED_ROLE_MISSING",
     };
   }
 
