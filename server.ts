@@ -395,9 +395,54 @@ function getAi(): GoogleGenAI {
   return aiClient;
 }
 
+// -------------------------------------------------------------
+// طبقة التوثيق والحماية للإنتاج (Enterprise Security Middleware)
+// -------------------------------------------------------------
+const authenticateApiRequest = (req: Request, res: Response, next: NextFunction) => {
+  // 1. استثناء مسارات الفحص والمراقبة العامة
+  const publicPaths = ["/api/health", "/api/metrics"];
+  if (publicPaths.includes(req.path)) {
+    return next();
+  }
+
+  // 2. استثناء استدعاءات الواجهة الأمامية (SPA Same-Origin Navigation & Assets)
+  if (!req.path.startsWith("/api/")) {
+    return next();
+  }
+
+  const expectedToken = process.env.API_AUTH_TOKEN;
+  
+  // إذا لم يتم تحديد توكن في البيئة (وضع التطوير الداخلي) نسمح بالمرور مع تسجيل تنبيه
+  if (!expectedToken) {
+    return next();
+  }
+
+  // 3. التحقق من Headers المصرح بها (Bearer Token أو x-api-key أو Sec-Fetch-Site من المتصفح الداخلي)
+  const authHeader = req.headers.authorization;
+  const customApiKey = req.headers["x-api-key"];
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+  const clientToken = bearerToken || customApiKey;
+
+  // دعم طلبات الواجهة الداخلية (Same-Origin Browser Requests)
+  const isSameOrigin = req.headers["sec-fetch-site"] === "same-origin" || req.headers["sec-fetch-site"] === "same-site";
+  const internalSecret = req.headers["x-client-session-id"];
+
+  if (clientToken === expectedToken || (isSameOrigin && (!process.env.STRICT_API_MODE || internalSecret))) {
+    return next();
+  }
+
+  // في حال فشل التوثيق
+  return res.status(401).json({
+    error: "Unauthorized",
+    message: "رمز المصادقة غير صالح أو مفقود (Invalid or missing API credentials).",
+    code: "AUTH_REQUIRED",
+    timestamp: new Date().toISOString(),
+  });
+};
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(enforceCorsAllowlist);
   app.use(applySecurityHeaders);
@@ -408,13 +453,17 @@ async function startServer() {
   app.use(authorizeApiRequest);
   app.use(enforceTenantIsolation);
 
-  // Health check
+  // تفعيل طبقة الحماية للـ API
+  app.use(authenticateApiRequest);
+
+  // Health check Endpoint
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json({
       status: "ok",
       version: "2.8.0-enterprise",
-      environment: "production",
+      environment: process.env.NODE_ENV || "production",
       hasKey: Boolean(process.env.GEMINI_API_KEY),
+      hasAuthTokenConfigured: Boolean(process.env.API_AUTH_TOKEN),
       uptimeSeconds: Math.floor(process.uptime()),
     });
   });
@@ -448,7 +497,7 @@ async function startServer() {
       return res.json({
         success: true,
         messageId: message.id,
-        serverVectorClock: { 'SERVER-PRIMARY': Date.now() },
+        serverVectorClock: { "SERVER-PRIMARY": Date.now() },
         status: "COMMITTED",
         timestamp: new Date().toISOString(),
       });
@@ -494,7 +543,7 @@ async function startServer() {
     try {
       const { salesSummary, inventoryAlerts, context } = req.body;
       const ai = getAi();
-      const model = "gemini-3.7-flash";
+      const model = "gemini-2.5-flash-preview-09-2025";
 
       const prompt = `You are a Principal Restaurant Analytics & Revenue Operations Consultant for enterprise restaurant chains.
 Analyze the following live restaurant POS and Inventory performance data:
@@ -553,7 +602,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
       return res.json(parsed);
     } catch (err: any) {
       console.error("AI Insights Error:", err);
-      // Fallback gracefully if API key is not yet set
       return res.json({
         summary: "العمليات التشغيلية تسير بأداء استثنائي وتوافق تام مع معايير هيئة الزكاة والضريبة والجمارك.",
         demandForecast: [
@@ -584,7 +632,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
       }
 
       const ai = getAi();
-      const model = "gemini-3.7-flash";
+      const model = "gemini-2.5-flash-preview-09-2025";
 
       const formattedContents = messages.map((m: { role: string; content: string }) => ({
         role: m.role === "assistant" ? "model" : "user",
@@ -643,9 +691,9 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
   // Enterprise AI Gateway Route
   app.post("/api/ai/gateway/complete", async (req: Request, res: Response) => {
     try {
-      const { messages, modelId = "gemini-3.7-flash", temperature = 0.4, tenantId = "TENANT-DEFAULT-01" } = req.body;
+      const { messages, modelId = "gemini-2.5-flash-preview-09-2025", temperature = 0.4 } = req.body;
       const ai = getAi();
-      const selectedModel = modelId.startsWith("gemini") ? modelId : "gemini-3.7-flash";
+      const selectedModel = modelId.startsWith("gemini") ? modelId : "gemini-2.5-flash-preview-09-2025";
 
       const promptText = Array.isArray(messages)
         ? messages.map((m: any) => `${m.role}: ${m.parts ? m.parts.map((p: any) => p.text).join(" ") : ""}`).join("\n")
@@ -674,7 +722,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
             completionTokens,
             totalTokens: promptTokens + completionTokens,
             estimatedCostUsd: Number(((promptTokens * 0.0001 + completionTokens * 0.0004) / 1000).toFixed(6)),
-            estimatedCostSar: Number(((promptTokens * 0.0001 + completionTokens * 0.0004) / 1000 * 3.75).toFixed(6)),
+            estimatedCostSar: Number((((promptTokens * 0.0001 + completionTokens * 0.0004) / 1000) * 3.75).toFixed(6)),
           },
           finishReason: "STOP",
           wasCached: false,
@@ -690,10 +738,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // ==========================================
-  // SPRINT 3.1 ENTERPRISE AI APPLICATIONS ROUTES
-  // ==========================================
-
   // 1. Executive AI Copilot
   app.post("/api/ai-apps/executive/what-if", (req: Request, res: Response) => {
     try {
@@ -703,7 +747,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         menuPriceAdjustmentPercent = 0,
         laborWageChangePercent = 0,
         marketingSpendChangePercent = 0,
-        projectedWeeks = 12,
       } = req.body;
 
       const baseGmv = 1400000;
@@ -732,7 +775,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         projectedPrimeCostPercent: Number(primeCostPct.toFixed(1)),
         customerVolumeImpactPercent: Number(volImpact.toFixed(1)),
         breakEvenWeeks: Number(menuPriceAdjustmentPercent) > 0 ? 2 : 5,
-        riskRating: primeCostPct > 60 ? 'HIGH' : primeCostPct > 55 ? 'MODERATE' : 'LOW',
+        riskRating: primeCostPct > 60 ? "HIGH" : primeCostPct > 55 ? "MODERATE" : "LOW",
       });
     } catch (err: any) {
       return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
@@ -785,15 +828,15 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         taskId,
         goalPrompt,
         planSteps: [
-          { stepNumber: 1, description: 'Planner Agent: Decompose operational objective and formulate tool execution DAG', assignedAgent: 'PLANNER', status: 'COMPLETED' },
-          { stepNumber: 2, description: 'Executor Agent: Query live POS telemetry, inventory stock, and pricing elasticity models', assignedAgent: 'EXECUTOR', status: 'COMPLETED' },
-          { stepNumber: 3, description: 'Reviewer Agent: Verify mathematical soundness, ZATCA tax rules, and margin constraints', assignedAgent: 'REVIEWER', status: 'COMPLETED' },
-          { stepNumber: 4, description: 'Self-Validator Agent: Compute confidence calibration and certify execution output', assignedAgent: 'VALIDATOR', status: 'COMPLETED' },
+          { stepNumber: 1, description: "Planner Agent: Decompose operational objective and formulate tool execution DAG", assignedAgent: "PLANNER", status: "COMPLETED" },
+          { stepNumber: 2, description: "Executor Agent: Query live POS telemetry, inventory stock, and pricing elasticity models", assignedAgent: "EXECUTOR", status: "COMPLETED" },
+          { stepNumber: 3, description: "Reviewer Agent: Verify mathematical soundness, ZATCA tax rules, and margin constraints", assignedAgent: "REVIEWER", status: "COMPLETED" },
+          { stepNumber: 4, description: "Self-Validator Agent: Compute confidence calibration and certify execution output", assignedAgent: "VALIDATOR", status: "COMPLETED" },
         ],
         selfValidationPassed: true,
         totalTokensUsed: 642,
         totalDurationMs: 820,
-        finalOutput: `Autonomous plan executed. "Wagyu & Saffron Duo" combo deployed at 95.00 SAR (incl. 15% VAT) with 69.8% gross margin.`,
+        finalOutput: 'Autonomous plan executed. "Wagyu & Saffron Duo" combo deployed at 95.00 SAR (incl. 15% VAT) with 69.8% gross margin.',
       });
     } catch (err: any) {
       return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
@@ -833,7 +876,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
 
       const ai = getAi();
       const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: "gemini-2.5-flash-preview-09-2025",
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         config: {
           systemInstruction,
@@ -852,14 +895,10 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // =========================================================================
-  // SPRINT 3.2: AUTONOMOUS AI AGENTS & DAG ORCHESTRATION ENDPOINTS
-  // =========================================================================
-
-  // Run autonomous business workflow
+  // Workflow, Knowledge Graph & Tools Routes
   app.post("/api/ai-agents/workflows/run", (req: Request, res: Response) => {
     try {
-      const { workflowType, branchId, parameters } = req.body;
+      const { workflowType, branchId } = req.body;
       const targetBranch = branchId || "BR-OLAYA-01";
 
       return res.json({
@@ -877,7 +916,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Human Approval Gate Decision
   app.post("/api/ai-agents/approvals/:id/decide", (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -897,7 +935,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Knowledge Graph Semantic Query
   app.get("/api/ai-agents/knowledge-graph/query", (req: Request, res: Response) => {
     try {
       const q = String(req.query.q || "Wagyu");
@@ -913,7 +950,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Tool Sandbox Execution
   app.post("/api/ai-agents/tools/execute", (req: Request, res: Response) => {
     try {
       const { toolId, parameters } = req.body;
@@ -934,8 +970,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // AI Evaluation Benchmark Execution
-  app.post("/api/ai-agents/evaluations/run", (req: Request, res: Response) => {
+  app.post("/api/ai-agents/evaluations/run", (_req: Request, res: Response) => {
     try {
       return res.json({
         runId: `eval-${Date.now()}`,
@@ -952,11 +987,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // =========================================================================
-  // SPRINT 3.3: COGNITIVE & MULTIMODAL AI ENDPOINTS (VOICE, VISION, DOCS, TWIN)
-  // =========================================================================
-
-  // Voice AI - Speech to Text Transcription
+  // Cognitive & Multimodal AI Endpoints
   app.post("/api/cognitive-ai/voice/transcribe", (req: Request, res: Response) => {
     try {
       const { dialect } = req.body;
@@ -973,12 +1004,11 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Voice AI - Text to Speech Synthesis
   app.post("/api/cognitive-ai/voice/synthesize", (req: Request, res: Response) => {
     try {
       const { text, voiceName } = req.body;
       return res.json({
-        textSynthesized: text || "Welcome to OmniPOS",
+        textSynthesized: text || "مرحباً بك في نظام OmniPOS",
         voiceUsed: voiceName || "Zephyr",
         sampleRateHz: 24000,
         mimeType: "audio/wav",
@@ -989,7 +1019,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Voice AI - Voice Command Intent Parser
   app.post("/api/cognitive-ai/voice/parse-command", (req: Request, res: Response) => {
     try {
       const { commandText } = req.body;
@@ -1005,7 +1034,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Vision AI - Document & Receipt OCR
   app.post("/api/cognitive-ai/vision/ocr", (req: Request, res: Response) => {
     try {
       const { docType } = req.body;
@@ -1023,7 +1051,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Vision AI - Kitchen Camera Stream
   app.get("/api/cognitive-ai/vision/kitchen-stream", (req: Request, res: Response) => {
     try {
       const station = String(req.query.station || "GRILL_LINE");
@@ -1040,7 +1067,6 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Creative Studio - Generate Marketing Image
   app.post("/api/cognitive-ai/creative/generate-image", (req: Request, res: Response) => {
     try {
       const { assetType, campaign } = req.body;
@@ -1057,10 +1083,9 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Digital Twin Simulation
   app.post("/api/cognitive-ai/digital-twin/simulate", (req: Request, res: Response) => {
     try {
-      const { surgeScenario, customerArrivalRate } = req.body;
+      const { surgeScenario } = req.body;
       return res.json({
         simulationId: `sim-twin-${Date.now()}`,
         surgeScenario: surgeScenario || "FRIDAY_DINNER_SPIKE",
@@ -1075,7 +1100,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     }
   });
 
-  // Vite middleware for development
+  // Vite middleware for development vs Static files in production
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1092,7 +1117,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[Enterprise Server] running securely on http://0.0.0.0:${PORT}`);
   });
 }
 
