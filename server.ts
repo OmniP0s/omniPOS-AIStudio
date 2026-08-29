@@ -306,6 +306,15 @@ function applySecurityHeaders(_req: Request, res: Response, next: NextFunction) 
   return next();
 }
 
+function handleApiError(err: unknown, req: Request, res: Response, _next: NextFunction) {
+  if (res.headersSent) {
+    return;
+  }
+  const errorId = `err-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+  console.error(JSON.stringify({ level: "error", event: "api_error", errorId, path: req.path, method: req.method, name: err instanceof Error ? err.name : "UnknownError" }));
+  res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred.", errorId } });
+}
+
 let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
@@ -380,7 +389,7 @@ async function startServer() {
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -412,7 +421,7 @@ async function startServer() {
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -558,12 +567,12 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
       console.error("Gemini Chat Error:", error);
       const errMsg = error instanceof Error ? error.message : "حدث خطأ أثناء معالجة الطلب في خادم الذكاء الاصطناعي.";
       if (req.body.stream && !res.headersSent) {
-        return res.status(500).json({ error: errMsg });
+        return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
       } else if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
         return res.end();
       }
-      return res.status(500).json({ error: errMsg });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -613,7 +622,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
       });
     } catch (err: any) {
       console.error("AI Gateway Server Route Error:", err);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -662,7 +671,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         riskRating: primeCostPct > 60 ? 'HIGH' : primeCostPct > 55 ? 'MODERATE' : 'LOW',
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -698,7 +707,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         confidence: 0.96,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -723,7 +732,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         finalOutput: `Autonomous plan executed. "Wagyu & Saffron Duo" combo deployed at 95.00 SAR (incl. 15% VAT) with 69.8% gross margin.`,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -775,7 +784,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     } catch (error: unknown) {
       console.error("Gemini Generate Error:", error);
       const errMsg = error instanceof Error ? error.message : "حدث خطأ أثناء توليد النص.";
-      return res.status(500).json({ error: errMsg });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -800,7 +809,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         estimatedCompletionSec: 2.5,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -820,7 +829,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         resumedWorkflowId: "wf-auto-po-01",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -836,7 +845,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         matchGrade: "EXACT_ONTOLOGY_MATCH",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -857,7 +866,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         executionTimeMs: 45,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -875,7 +884,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -896,7 +905,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -912,7 +921,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         durationMs: 1450,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -928,7 +937,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         status: "EXECUTED",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -946,7 +955,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         overallConfidencePct: 99.3,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -963,7 +972,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -980,7 +989,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         imageUrl: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=1200&q=80",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -998,7 +1007,7 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
         status: "COMPLETED",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
 
@@ -1011,7 +1020,8 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    app.use(handleApiError);
+  app.use(express.static(distPath));
     app.get("*", (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
