@@ -20,16 +20,40 @@ type AuthTokenPayload = {
   exp: number;
 };
 
+type AuthorizationDecision = {
+  allowed: boolean;
+  action: string;
+  resource: string;
+  reason?: string;
+};
+
+type RouteAuthorizationPolicy = {
+  action: string;
+  resource: string;
+};
+
 declare global {
   namespace Express {
     interface Request {
       user?: AuthenticatedUser;
+      authorization?: AuthorizationDecision;
     }
   }
 }
 
 const PUBLIC_API_ROUTES = new Set(["GET /api/health"]);
 const AUTH_TOKEN_PARTS = 2;
+const DEFAULT_PRIVATE_API_POLICY: RouteAuthorizationPolicy = { action: "access", resource: "private-api" };
+const ROUTE_AUTHORIZATION_POLICIES: Array<{ method: string; pathPrefix: string; policy: RouteAuthorizationPolicy }> = [
+  { method: "GET", pathPrefix: "/api/metrics", policy: { action: "read", resource: "platform-metrics" } },
+  { method: "POST", pathPrefix: "/api/ai", policy: { action: "invoke", resource: "ai-services" } },
+  { method: "POST", pathPrefix: "/api/ai-apps", policy: { action: "invoke", resource: "ai-applications" } },
+  { method: "POST", pathPrefix: "/api/ai-agents", policy: { action: "invoke", resource: "ai-agents" } },
+  { method: "POST", pathPrefix: "/api/chat", policy: { action: "invoke", resource: "ai-chat" } },
+  { method: "POST", pathPrefix: "/api/generate", policy: { action: "invoke", resource: "content-generation" } },
+  { method: "POST", pathPrefix: "/api/sync", policy: { action: "write", resource: "sync-outbox" } },
+  { method: "POST", pathPrefix: "/api/zatca", policy: { action: "write", resource: "zatca-compliance" } },
+];
 
 function isPublicApiRoute(req: Request): boolean {
   return PUBLIC_API_ROUTES.has(`${req.method} ${req.path}`);
@@ -86,6 +110,29 @@ function verifyAuthToken(token: string, secret: string): AuthenticatedUser | nul
   };
 }
 
+function resolveAuthorizationPolicy(req: Request): RouteAuthorizationPolicy {
+  return ROUTE_AUTHORIZATION_POLICIES.find(({ method, pathPrefix }) => req.method === method && req.path.startsWith(pathPrefix))?.policy ?? DEFAULT_PRIVATE_API_POLICY;
+}
+
+function evaluateAuthorization(req: Request): AuthorizationDecision {
+  const policy = resolveAuthorizationPolicy(req);
+
+  if (!req.user) {
+    return {
+      allowed: false,
+      action: policy.action,
+      resource: policy.resource,
+      reason: "AUTHENTICATED_IDENTITY_REQUIRED",
+    };
+  }
+
+  return {
+    allowed: true,
+    action: policy.action,
+    resource: policy.resource,
+  };
+}
+
 function authenticateApiRequest(req: Request, res: Response, next: NextFunction) {
   if (!req.path.startsWith("/api") || isPublicApiRoute(req)) {
     return next();
@@ -112,6 +159,26 @@ function authenticateApiRequest(req: Request, res: Response, next: NextFunction)
   return next();
 }
 
+function authorizeApiRequest(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api") || isPublicApiRoute(req)) {
+    return next();
+  }
+
+  const decision = evaluateAuthorization(req);
+  req.authorization = decision;
+
+  if (!decision.allowed) {
+    return res.status(403).json({
+      error: {
+        code: "FORBIDDEN",
+        message: "The authenticated principal is not authorized to access this endpoint.",
+      },
+    });
+  }
+
+  return next();
+}
+
 let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
@@ -135,6 +202,7 @@ async function startServer() {
 
   app.use(express.json({ limit: "10mb" }));
   app.use(authenticateApiRequest);
+  app.use(authorizeApiRequest);
 
   // Health check
   app.get("/api/health", (_req: Request, res: Response) => {
