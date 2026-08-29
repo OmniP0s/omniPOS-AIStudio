@@ -246,6 +246,35 @@ function enforceTenantIsolation(req: Request, res: Response, next: NextFunction)
   return next();
 }
 
+function containsUnsafeInput(value: unknown): boolean {
+  if (typeof value === "string") {
+    return value.length > 20000 || /<script[\s>]/i.test(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(containsUnsafeInput);
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(containsUnsafeInput);
+  }
+  return false;
+}
+
+function validateApiRequest(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api")) {
+    return next();
+  }
+
+  if (["POST", "PUT", "PATCH"].includes(req.method) && (!req.is("application/json") || req.body === null || typeof req.body !== "object" || Array.isArray(req.body))) {
+    return res.status(400).json({ error: { code: "INVALID_REQUEST_BODY", message: "Request body must be a JSON object." } });
+  }
+
+  if (containsUnsafeInput(req.body) || containsUnsafeInput(req.query) || containsUnsafeInput(req.params)) {
+    return res.status(400).json({ error: { code: "INVALID_INPUT", message: "Request input failed validation." } });
+  }
+
+  return next();
+}
+
 let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
@@ -267,7 +296,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: "10mb" }));
+  app.use(express.json({ limit: "1mb" }));
+  app.use(validateApiRequest);
   app.use(authenticateApiRequest);
   app.use(authorizeApiRequest);
   app.use(enforceTenantIsolation);
