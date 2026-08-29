@@ -2,14 +2,14 @@ import express, { Request, Response } from "express";
 import { registerApiRoutes } from "./routes/apiRoutes";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { validateRequiredSecrets } from "./config/env";
+import { serverConfig, validateRequiredSecrets } from "./config/env";
 import { applySecurityHeaders, authenticateApiRequest, authorizeApiRequest, enforceCorsAllowlist, enforceTenantIsolation, handleApiError, rateLimitApiRequests, validateApiRequest } from "./middleware/security";
 
 validateRequiredSecrets();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = serverConfig.port;
 
   app.use(enforceCorsAllowlist);
   app.use(applySecurityHeaders);

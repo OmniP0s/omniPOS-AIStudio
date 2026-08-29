@@ -1,8 +1,10 @@
+import { serverConfig } from "../config/env";
+
 export function getHealthStatus() {
   return {
     status: "ok",
     version: "2.8.0-enterprise",
-    environment: "production",
+    environment: serverConfig.environment,
     hasKey: Boolean(process.env.GEMINI_API_KEY),
     uptimeSeconds: Math.floor(process.uptime()),
   };

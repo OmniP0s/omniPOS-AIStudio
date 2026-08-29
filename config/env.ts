@@ -2,6 +2,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+export const serverConfig = {
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  environment: process.env.NODE_ENV || "production",
+};
+
 export function validateRequiredSecrets() {
   const missing: string[] = [];
   if (!process.env.API_AUTH_SECRET || process.env.API_AUTH_SECRET.length < 32) {
