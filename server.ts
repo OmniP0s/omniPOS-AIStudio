@@ -7,6 +7,8 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
+validateRequiredSecrets();
+
 type AuthenticatedUser = {
   id: string;
   tenantId: string;
@@ -334,6 +336,19 @@ function handleApiError(err: unknown, req: Request, res: Response, _next: NextFu
   const errorId = `err-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   console.error(JSON.stringify({ level: "error", event: "api_error", errorId, path: req.path, method: req.method, name: err instanceof Error ? err.name : "UnknownError" }));
   res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred.", errorId } });
+}
+
+function validateRequiredSecrets() {
+  const missing: string[] = [];
+  if (!process.env.API_AUTH_SECRET || process.env.API_AUTH_SECRET.length < 32) {
+    missing.push("API_AUTH_SECRET (minimum 32 characters)");
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    missing.push("GEMINI_API_KEY");
+  }
+  if (missing.length > 0) {
+    throw new Error(`Missing or invalid required secrets: ${missing.join(", ")}`);
+  }
 }
 
 let aiClient: GoogleGenAI | null = null;
