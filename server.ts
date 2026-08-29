@@ -295,6 +295,17 @@ function rateLimitApiRequests(req: Request, res: Response, next: NextFunction) {
   return next();
 }
 
+function applySecurityHeaders(_req: Request, res: Response, next: NextFunction) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  return next();
+}
+
 let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
@@ -316,6 +327,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(applySecurityHeaders);
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimitApiRequests);
   app.use(validateApiRequest);
