@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { apiRouter } from "./routes/apiRoutes";
+import { registerApiRoutes } from "./routes/apiRoutes";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { validateRequiredSecrets } from "./config/env";
@@ -20,7 +20,7 @@ async function startServer() {
   app.use(authorizeApiRequest);
   app.use(enforceTenantIsolation);
 
-  app.use("/api", apiRouter);
+  registerApiRoutes(app);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
