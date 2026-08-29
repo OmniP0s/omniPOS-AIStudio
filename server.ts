@@ -318,6 +318,22 @@ function rateLimitApiRequests(req: Request, res: Response, next: NextFunction) {
   return next();
 }
 
+const corsAllowedOrigins = new Set((process.env.CORS_ALLOWED_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean));
+
+function enforceCorsAllowlist(req: Request, res: Response, next: NextFunction) {
+  const origin = req.header("origin");
+  if (!origin) return next();
+  if (!corsAllowedOrigins.has(origin)) {
+    return res.status(403).json({ error: { code: "CORS_ORIGIN_DENIED", message: "Origin is not allowed." } });
+  }
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  return next();
+}
+
 function applySecurityHeaders(_req: Request, res: Response, next: NextFunction) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -372,6 +388,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(enforceCorsAllowlist);
   app.use(applySecurityHeaders);
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimitApiRequests);
