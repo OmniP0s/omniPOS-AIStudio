@@ -41,6 +41,7 @@ declare global {
     interface Request {
       user?: AuthenticatedUser;
       authorization?: AuthorizationDecision;
+      tenantId?: string;
     }
   }
 }
@@ -205,6 +206,46 @@ function authorizeApiRequest(req: Request, res: Response, next: NextFunction) {
   return next();
 }
 
+function firstTenantIdCandidate(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const tenantId = record.tenantId;
+  return typeof tenantId === "string" && tenantId.trim().length > 0 ? tenantId : null;
+}
+
+function enforceTenantIsolation(req: Request, res: Response, next: NextFunction) {
+  if (!req.path.startsWith("/api") || isPublicApiRoute(req)) {
+    return next();
+  }
+
+  if (!req.user) {
+    return res.status(403).json({
+      error: {
+        code: "TENANT_CONTEXT_REQUIRED",
+        message: "A verified tenant context is required for this endpoint.",
+      },
+    });
+  }
+
+  const authenticatedTenantId = req.user.tenantId;
+  const suppliedTenantId = firstTenantIdCandidate(req.body) ?? firstTenantIdCandidate(req.query) ?? firstTenantIdCandidate(req.params);
+
+  if (suppliedTenantId && suppliedTenantId !== authenticatedTenantId) {
+    return res.status(403).json({
+      error: {
+        code: "TENANT_MISMATCH",
+        message: "Client-supplied tenant context does not match the authenticated tenant.",
+      },
+    });
+  }
+
+  req.tenantId = authenticatedTenantId;
+  return next();
+}
+
 let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
@@ -229,6 +270,7 @@ async function startServer() {
   app.use(express.json({ limit: "10mb" }));
   app.use(authenticateApiRequest);
   app.use(authorizeApiRequest);
+  app.use(enforceTenantIsolation);
 
   // Health check
   app.get("/api/health", (_req: Request, res: Response) => {
