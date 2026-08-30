@@ -261,6 +261,8 @@ function getAi(): GoogleGenAI {
 }
 
 async function startServer() {
+  SecurityPipeline.assertConfiguredForRuntime();
+
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
@@ -289,7 +291,7 @@ async function startServer() {
       version: "2.8.0-enterprise",
       environment: process.env.NODE_ENV || "production",
       hasKey: Boolean(process.env.GEMINI_API_KEY),
-      hasAuthTokenConfigured: Boolean(process.env.API_AUTH_TOKEN),
+      hasAuthTokenConfigured: Boolean(process.env.API_AUTH_SECRET || process.env.API_AUTH_TOKEN),
       uptimeSeconds: Math.floor(process.uptime()),
     });
   });
