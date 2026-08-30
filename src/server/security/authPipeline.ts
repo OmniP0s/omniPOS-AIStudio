@@ -150,18 +150,13 @@ export class SecurityPipeline {
         claims = SecurityPipeline.verifyToken(token);
       }
 
-      // Default fallback context in single-tenant dev mode if no token is provided
       if (!claims) {
-        const devTenantId = (req.header('x-tenant-id') as string) || 'TENANT-SA-001';
-        const devBranchId = (req.header('x-branch-id') as string) || 'BR-01';
-        claims = {
-          sub: 'usr-admin-system',
-          tenantId: devTenantId,
-          branchId: devBranchId,
-          roles: ['admin', 'manager', 'cashier'],
-          permissions: ['*'],
-          exp: Math.floor(Date.now() / 1000) + 86400,
-        };
+        return res.status(401).json({
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'A valid authentication token is required.',
+          },
+        });
       }
 
       const tenantContext: ITenantContext = {
