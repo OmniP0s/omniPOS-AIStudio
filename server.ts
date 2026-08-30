@@ -1,5 +1,8 @@
 import crypto from "crypto";
 import express, { NextFunction, Request, Response } from "express";
+import { serverConfig } from "./config/env";
+import { enforceTenantIsolation } from "./middleware/tenantIsolation";
+import { registerApiRoutes } from "./routes/apiRoutes";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
@@ -264,7 +267,7 @@ async function startServer() {
   SecurityPipeline.assertConfiguredForRuntime();
 
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = serverConfig.port;
 
   // Run database migrations if PostgreSQL is connected
   try {
@@ -283,6 +286,7 @@ async function startServer() {
   app.use(validateApiRequest);
   app.use(SecurityPipeline.middleware());
   app.use(authorizeApiRequest);
+  app.use(enforceTenantIsolation);
 
   // Health check Endpoint
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -1363,6 +1367,8 @@ Provide a comprehensive, high-value executive intelligence brief in valid JSON f
       return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   });
+
+  registerApiRoutes(app);
 
   // Vite middleware for development vs Static files in production
   if (process.env.NODE_ENV !== "production") {
