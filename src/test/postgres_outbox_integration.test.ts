@@ -7,6 +7,7 @@ import { OutboxRelayWorker } from '../server/sync/outboxRelayWorker';
 import { TenantRepositoryFactory } from '../server/db/tenantRepository';
 import { PostgresUnitOfWork } from '../server/db/unitOfWork';
 import { OutboxMessage } from '../domain/contracts/outbox';
+import { TenantContextHolder } from '../server/security/tenantContext';
 
 describe('Transactional Outbox Service & Relay Worker', () => {
   it('enforces idempotency and causal ordering via TenantRepositoryFactory outbox service', async () => {
@@ -141,7 +142,13 @@ describe('Transactional Outbox Service & Relay Worker', () => {
   it('UnitOfWork provides transaction-bound outbox repository for dual-write prevention', async () => {
     const uow = new PostgresUnitOfWork('tenant-sa-001');
     
-    await uow.withTransaction('tenant-sa-001', async (repos) => {
+    await TenantContextHolder.run({
+      tenantId: 'tenant-sa-001',
+      userId: 'test-user',
+      roles: ['admin'],
+      permissions: ['*'],
+      correlationId: 'test-uow-outbox',
+    }, () => uow.withTransaction('tenant-sa-001', async (repos) => {
       expect(repos.orderRepo).toBeDefined();
       expect(repos.inventoryRepo).toBeDefined();
       expect(repos.shiftRepo).toBeDefined();
@@ -159,7 +166,7 @@ describe('Transactional Outbox Service & Relay Worker', () => {
       });
 
       expect(enqueued.idempotencyKey).toBe('idem-uow-01');
-    });
+    }));
   });
 
   it('TenantRepositoryFactory resolves outbox service matching environment configuration', () => {

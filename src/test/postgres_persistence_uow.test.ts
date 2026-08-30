@@ -53,10 +53,12 @@ describe('Enterprise PostgreSQL Persistence Architecture & Migrations', () => {
     const uow = new PostgresUnitOfWork('tenant-sa-test');
     let stateMutated = false;
 
-    const result = await uow.executeInTransaction(async () => {
-      stateMutated = true;
-      return { success: true, count: 42 };
-    });
+    const result = await TenantContextHolder.run(createTenantContext('tenant-sa-test'), () =>
+      uow.executeInTransaction(async () => {
+        stateMutated = true;
+        return { success: true, count: 42 };
+      })
+    );
 
     expect(stateMutated).toBe(true);
     expect(result.success).toBe(true);
@@ -77,7 +79,6 @@ describe('Enterprise PostgreSQL Persistence Architecture & Migrations', () => {
   });
 
   it('TenantContextHolder prevents cross-tenant leakage during repository calls', async () => {
-    TenantContextHolder.setTenantId('TENANT-ALPHA');
     const orderRepo = new MultiTenantOrderRepository();
 
     const order: Order = {
@@ -112,16 +113,16 @@ describe('Enterprise PostgreSQL Persistence Architecture & Migrations', () => {
       version: 1,
     };
 
-    // Save in TENANT-ALPHA
-    await orderRepo.save('TENANT-ALPHA', order);
-    const retrieved = await orderRepo.findById('TENANT-ALPHA', 'ord-db-test-01');
-    expect(retrieved).not.toBeNull();
-    expect(retrieved?.id).toBe('ord-db-test-01');
+    await TenantContextHolder.run(createTenantContext('TENANT-ALPHA'), async () => {
+      await orderRepo.save('TENANT-ALPHA', order);
+      const retrieved = await orderRepo.findById('TENANT-ALPHA', 'ord-db-test-01');
+      expect(retrieved?.id).toBe('ord-db-test-01');
+    });
 
-    // Switch context to TENANT-BETA and attempt access -> Must reject
-    TenantContextHolder.setTenantId('TENANT-BETA');
-    await expect(orderRepo.findById('TENANT-BETA', 'ord-db-test-01')).resolves.toBeNull();
-    await expect(orderRepo.findById('TENANT-ALPHA', 'ord-db-test-01')).rejects.toThrow(/Cross-tenant/);
+    await TenantContextHolder.run(createTenantContext('TENANT-BETA'), async () => {
+      await expect(orderRepo.findById('TENANT-BETA', 'ord-db-test-01')).resolves.toBeNull();
+      await expect(orderRepo.findById('TENANT-ALPHA', 'ord-db-test-01')).rejects.toThrow(/Cross-tenant/);
+    });
   });
 
   it('IndexedDbStorage edge persistence initializes gracefully in edge/test environment', async () => {
@@ -136,9 +137,11 @@ describe('Enterprise PostgreSQL Persistence Architecture & Migrations', () => {
   it('PostgresUnitOfWork safely catches errors and executes rollback without silent failure', async () => {
     const uow = new PostgresUnitOfWork('tenant-sa-001');
     await expect(
-      uow.executeInTransaction(async () => {
-        throw new Error('Database constraint violation simulated');
-      })
+      TenantContextHolder.run(createTenantContext('tenant-sa-001'), () =>
+        uow.executeInTransaction(async () => {
+          throw new Error('Database constraint violation simulated');
+        })
+      )
     ).rejects.toThrow('Database constraint violation simulated');
   });
 
@@ -168,3 +171,13 @@ describe('Enterprise PostgreSQL Persistence Architecture & Migrations', () => {
     }
   });
 });
+
+function createTenantContext(tenantId: string) {
+  return {
+    tenantId,
+    userId: 'test-user',
+    roles: ['admin'],
+    permissions: ['*'],
+    correlationId: `test-${tenantId}`,
+  };
+}

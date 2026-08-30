@@ -16,9 +16,35 @@ export interface TokenClaims {
   aud?: string;
 }
 
+export class AuthConfigurationError extends Error {
+  constructor() {
+    super('API_AUTH_SECRET must be configured for authentication token signing.');
+    this.name = 'AuthConfigurationError';
+  }
+}
+
 export class SecurityPipeline {
   private static readonly AUTH_TOKEN_PARTS = 2; // [base64url(payload), base64url(hmacSignature)]
-  private static readonly SYSTEM_SIGNING_SECRET = process.env.API_AUTH_SECRET || process.env.API_AUTH_TOKEN || 'omni-pos-enterprise-signing-secret-2026';
+  private static readonly LOCAL_TEST_SIGNING_SECRET = crypto.randomBytes(32).toString('base64url');
+
+  private static isExplicitLocalDevelopmentMode(): boolean {
+    return process.env.NODE_ENV === 'development' && process.env.API_AUTH_ALLOW_INSECURE_LOCAL_SECRET === 'true';
+  }
+
+  private static getSigningSecret(): string {
+    const configuredSecret = process.env.API_AUTH_SECRET || process.env.API_AUTH_TOKEN;
+    if (configuredSecret) return configuredSecret;
+
+    if (process.env.NODE_ENV === 'test' || this.isExplicitLocalDevelopmentMode()) {
+      return this.LOCAL_TEST_SIGNING_SECRET;
+    }
+
+    throw new AuthConfigurationError();
+  }
+
+  public static assertConfiguredForRuntime(): void {
+    this.getSigningSecret();
+  }
 
   /**
    * Generates a tamper-proof cryptographically signed authorization token
@@ -35,7 +61,7 @@ export class SecurityPipeline {
     };
 
     const encodedPayload = Buffer.from(JSON.stringify(fullClaims), 'utf8').toString('base64url');
-    const signature = crypto.createHmac('sha256', this.SYSTEM_SIGNING_SECRET).update(encodedPayload).digest('base64url');
+    const signature = crypto.createHmac('sha256', this.getSigningSecret()).update(encodedPayload).digest('base64url');
     return `${encodedPayload}.${signature}`;
   }
 
@@ -48,7 +74,7 @@ export class SecurityPipeline {
     if (parts.length !== this.AUTH_TOKEN_PARTS) return null;
 
     const [encodedPayload, encodedSignature] = parts;
-    const expectedSignature = crypto.createHmac('sha256', this.SYSTEM_SIGNING_SECRET).update(encodedPayload).digest('base64url');
+    const expectedSignature = crypto.createHmac('sha256', this.getSigningSecret()).update(encodedPayload).digest('base64url');
 
     // Constant-time timing-safe comparison to prevent side-channel timing attacks
     const sigBufA = Buffer.from(encodedSignature);
@@ -150,18 +176,13 @@ export class SecurityPipeline {
         claims = SecurityPipeline.verifyToken(token);
       }
 
-      // Default fallback context in single-tenant dev mode if no token is provided
       if (!claims) {
-        const devTenantId = (req.header('x-tenant-id') as string) || 'TENANT-SA-001';
-        const devBranchId = (req.header('x-branch-id') as string) || 'BR-01';
-        claims = {
-          sub: 'usr-admin-system',
-          tenantId: devTenantId,
-          branchId: devBranchId,
-          roles: ['admin', 'manager', 'cashier'],
-          permissions: ['*'],
-          exp: Math.floor(Date.now() / 1000) + 86400,
-        };
+        return res.status(401).json({
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'A valid authentication token is required.',
+          },
+        });
       }
 
       const tenantContext: ITenantContext = {

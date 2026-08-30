@@ -11,6 +11,7 @@ import { MultiTenantOrderRepository, MultiTenantInventoryRepository, MultiTenant
 import { OutboxSyncEngine } from '../sync/outboxEngine';
 
 import { TenantContextHolder } from '../security/tenantContext';
+import { TransactionClientContext } from './transactionContext';
 
 export interface ITransactionalRepositories {
   orderRepo: IOrderRepository;
@@ -42,7 +43,7 @@ export class PostgresUnitOfWork implements IUnitOfWork {
       if (this.tenantId) {
         await client.query('SET LOCAL app.current_tenant_id = $1', [this.tenantId]);
       }
-      const result = await work();
+      const result = await TransactionClientContext.run(client, work);
       await client.query('COMMIT');
       return result;
     } catch (err) {
@@ -86,7 +87,7 @@ export class PostgresUnitOfWork implements IUnitOfWork {
         outboxService: new PostgresOutboxService(client),
       };
 
-      const result = await operation(repos, client);
+      const result = await TransactionClientContext.run(client, () => operation(repos, client));
       await client.query('COMMIT');
       return result;
     } catch (err) {

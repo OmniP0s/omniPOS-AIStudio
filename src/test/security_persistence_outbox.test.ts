@@ -6,6 +6,28 @@ import { VectorClockEngine, OutboxSyncEngine } from '../server/sync/outboxEngine
 import { Order, InventoryItem } from '../types';
 
 describe('Zero-Trust Multi-Tenant Security & Context Pipeline', () => {
+  it('fails closed outside an explicit AsyncLocalStorage tenant context', () => {
+    expect(TenantContextHolder.get()).toBeUndefined();
+    expect(() => TenantContextHolder.getTenantId()).toThrow(/context is required/);
+    expect(() => TenantContextHolder.setTenantId('TENANT-LEAK')).toThrow(/context is required/);
+    expect(TenantContextHolder.get()).toBeUndefined();
+  });
+
+  it('does not permit a request-scoped tenant context to be changed or leaked', async () => {
+    await TenantContextHolder.run({
+      tenantId: 'TENANT-001',
+      userId: 'usr-1',
+      roles: ['cashier'],
+      permissions: ['orders:read'],
+      correlationId: 'corr-isolation',
+    }, async () => {
+      expect(() => TenantContextHolder.setTenantId('TENANT-002')).toThrow(/cannot be changed/);
+      expect(TenantContextHolder.getTenantId()).toBe('TENANT-001');
+    });
+
+    expect(TenantContextHolder.get()).toBeUndefined();
+  });
+
   it('isolates tenant context cleanly across asynchronous boundaries', async () => {
     const ctx1: ITenantContext = {
       tenantId: 'TENANT-001',
@@ -52,6 +74,45 @@ describe('Zero-Trust Multi-Tenant Security & Context Pipeline', () => {
     expect(verified?.roles).toContain('manager');
   });
 
+
+  it('rejects private API requests without a valid token instead of creating fallback admin context', () => {
+    const middleware = SecurityPipeline.middleware();
+    let nextCalled = false;
+    const headers = new Map<string, string>();
+    const req: any = {
+      path: '/api/orders',
+      header: (name: string) => headers.get(name.toLowerCase()),
+    };
+    const res: any = {
+      statusCode: 200,
+      headers: new Map<string, string>(),
+      body: undefined,
+      setHeader: (name: string, value: string) => res.headers.set(name.toLowerCase(), value),
+      status: (code: number) => {
+        res.statusCode = code;
+        return res;
+      },
+      json: (payload: unknown) => {
+        res.body = payload;
+        return res;
+      },
+    };
+
+    middleware(req, res, () => {
+      nextCalled = true;
+    });
+
+    expect(nextCalled).toBe(false);
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'A valid authentication token is required.',
+      },
+    });
+    expect(req.user).toBeUndefined();
+    expect(req.tenantId).toBeUndefined();
+  });
   it('rejects tampered or forged tokens', () => {
     const validToken = SecurityPipeline.generateToken({
       sub: 'usr-cashier-1',

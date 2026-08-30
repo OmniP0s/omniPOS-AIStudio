@@ -15,29 +15,22 @@ export interface ITenantContext {
 
 export class TenantContextHolder {
   private static readonly storage = new AsyncLocalStorage<ITenantContext>();
-  private static fallbackContext: ITenantContext = {
-    tenantId: 'tenant-sa-001',
-    userId: 'usr-system-admin',
-    roles: ['admin'],
-    permissions: ['*'],
-    correlationId: 'corr-init',
-  };
 
   public static run<R>(context: ITenantContext, callback: () => R): R {
     return this.storage.run(context, callback);
   }
 
-  public static setTenantId(tenantId: string, userId: string = 'usr-admin'): void {
-    const current = this.storage.getStore() || this.fallbackContext;
-    this.fallbackContext = {
-      ...current,
-      tenantId,
-      userId,
-    };
+  public static setTenantId(tenantId: string): void {
+    const current = this.getRequired();
+    if (current.tenantId !== tenantId) {
+      throw new Error(
+        `Security Violation: Tenant context cannot be changed (active: ${current.tenantId}, requested: ${tenantId})`
+      );
+    }
   }
 
   public static get(): ITenantContext | undefined {
-    return this.storage.getStore() || this.fallbackContext;
+    return this.storage.getStore();
   }
 
   public static getRequired(): ITenantContext {
