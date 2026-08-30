@@ -459,7 +459,9 @@ export interface WaitlistEntry {
 export interface Shift {
   id: string;
   shiftNumber: string;
+  tenantId?: string;
   branchId: string;
+  terminalId?: string;
   cashierId: string;
   cashierName: string;
   startTime: string;

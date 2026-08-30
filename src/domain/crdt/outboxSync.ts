@@ -1,4 +1,8 @@
 // CRDT, Vector Clocks & Outbox Sync Engine for Distributed Offline-First POS
+// Backed durably by typed IndexedDB Edge storage - no localStorage operational fallback.
+
+import { EdgeOutboxStore } from '../persistence/edgeRepositories';
+import { globalEdgeDatabase } from '../persistence/edgeDatabase';
 
 export interface OutboxMessage {
   id: string;
@@ -69,17 +73,37 @@ export class OutboxQueueManager {
   private vectorClock: VectorClockEngine;
   private isOnline: boolean = true;
   private subscribers: ((queue: OutboxMessage[]) => void)[] = [];
+  private edgeOutboxStore: EdgeOutboxStore;
+  private isInitialized: boolean = false;
 
-  constructor(nodeId: string = 'POS-TERMINAL-01') {
+  constructor(nodeId: string = 'POS-TERMINAL-01', edgeOutboxStore?: EdgeOutboxStore) {
     this.vectorClock = new VectorClockEngine(nodeId);
-    // Load from local storage if available
+    this.edgeOutboxStore = edgeOutboxStore || new EdgeOutboxStore(globalEdgeDatabase);
+    this.initFromIndexedDb().catch(() => {});
+  }
+
+  public async initFromIndexedDb(): Promise<void> {
     try {
-      const saved = localStorage.getItem('omni_pos_outbox_queue');
-      if (saved) {
-        this.queue = JSON.parse(saved);
+      const entries = await this.edgeOutboxStore.peekPending(500);
+      if (entries && entries.length > 0) {
+        this.queue = entries.map((e) => ({
+          id: e.id,
+          eventType: e.payload?.eventType || (e.operation === 'CREATE' ? 'ORDER_CREATED' : 'ORDER_UPDATED'),
+          entityId: e.entityId,
+          payload: e.payload,
+          nodeId: e.terminalId || this.vectorClock.getNodeId(),
+          vectorClock: e.vectorClock || {},
+          timestamp: e.createdAt,
+          status: e.status === 'IN_FLIGHT' ? 'SYNCING' : (e.status as any),
+          retryCount: e.retryCount || 0,
+          lastError: e.lastError,
+        }));
       }
+      this.isInitialized = true;
+      this.notifySubscribers();
     } catch {
-      this.queue = [];
+      // Running in environment without indexedDB
+      this.isInitialized = true;
     }
   }
 
@@ -91,13 +115,31 @@ export class OutboxQueueManager {
     };
   }
 
-  private notify() {
-    try {
-      localStorage.setItem('omni_pos_outbox_queue', JSON.stringify(this.queue));
-    } catch (e) {
-      console.warn('LocalStorage error:', e);
-    }
+  private notifySubscribers() {
     this.subscribers.forEach(fn => fn(this.getQueue()));
+  }
+
+  private async persistToIndexedDb(msg: OutboxMessage): Promise<void> {
+    try {
+      await this.edgeOutboxStore.enqueue({
+        id: msg.id,
+        tenantId: (msg.payload && msg.payload.tenantId) || 'tenant-sa-001',
+        branchId: (msg.payload && msg.payload.branchId) || 'branch-01',
+        terminalId: msg.nodeId,
+        entityType: 'ORDER',
+        entityId: msg.entityId,
+        operation: 'CREATE',
+        payload: msg.payload,
+        idempotencyKey: `idem-${msg.id}`,
+        createdAt: msg.timestamp,
+        status: msg.status === 'SYNCING' ? 'IN_FLIGHT' : (msg.status as any),
+        retryCount: msg.retryCount,
+        lastError: msg.lastError,
+        vectorClock: msg.vectorClock,
+      });
+    } catch {
+      // Fallback or test environment
+    }
   }
 
   public enqueue(eventType: OutboxMessage['eventType'], entityId: string, payload: any): OutboxMessage {
@@ -115,7 +157,8 @@ export class OutboxQueueManager {
     };
 
     this.queue.push(msg);
-    this.notify();
+    this.persistToIndexedDb(msg);
+    this.notifySubscribers();
 
     if (this.isOnline) {
       this.processQueue();
@@ -147,7 +190,7 @@ export class OutboxQueueManager {
 
     for (const msg of pending) {
       msg.status = 'SYNCING';
-      this.notify();
+      this.notifySubscribers();
 
       try {
         // Post to server sync endpoint
@@ -159,19 +202,22 @@ export class OutboxQueueManager {
 
         if (res.ok) {
           msg.status = 'SYNCED';
-          // Clean up synced messages older than 5 minutes
+          await this.edgeOutboxStore.markSynced(msg.id).catch(() => {});
+          // Clean up synced messages
           this.queue = this.queue.filter(m => m.id !== msg.id || m.status !== 'SYNCED');
         } else {
           msg.status = 'FAILED';
           msg.retryCount += 1;
           msg.lastError = `Server returned ${res.status}`;
+          await this.edgeOutboxStore.markFailed(msg.id, msg.lastError).catch(() => {});
         }
       } catch (err: any) {
         msg.status = 'FAILED';
         msg.retryCount += 1;
         msg.lastError = err.message || 'Network Timeout';
+        await this.edgeOutboxStore.markFailed(msg.id, msg.lastError).catch(() => {});
       }
-      this.notify();
+      this.notifySubscribers();
     }
   }
 
@@ -186,12 +232,12 @@ export class OutboxQueueManager {
     return { syncedCount: Math.max(0, prevCount - newCount) };
   }
 
-  public clearQueue() {
+  public async clearQueue(): Promise<void> {
     this.queue = [];
-    this.notify();
+    await this.edgeOutboxStore.clearAll().catch(() => {});
+    this.notifySubscribers();
   }
 }
 
 export const globalOutbox = new OutboxQueueManager();
 export const outboxManager = globalOutbox;
-

@@ -1,4 +1,8 @@
 // Hardware Bridge & Peripheral Control (ESC/POS Thermal Printer, Scale, Cash Drawer, Barcode, CFD)
+import { EscPosByteCompiler, ThermalPrinterDeviceController, EmulatedHardwareTransport } from './escposProtocol';
+
+export const globalHardwareTransport = new EmulatedHardwareTransport();
+export const globalPrinterController = new ThermalPrinterDeviceController(globalHardwareTransport);
 
 export interface ScaleReading {
   weightKg: number;
@@ -112,12 +116,15 @@ class HardwareBridgeBus {
     this.listeners.forEach(fn => fn(this.getStatus()));
   }
 
-  // Trigger Cash Drawer Kick
+  // Trigger Cash Drawer Kick using ESC/POS byte sequence
   public openCashDrawer(reason: string = 'Sale / Pay Out') {
     this.status.cashDrawer.isOpen = true;
     this.status.cashDrawer.lastOpenedAt = new Date().toISOString();
     this.notify();
     this.emitEvent('CASH_DRAWER_KICK', { reason, status: 'OPEN' });
+
+    // Send binary pulse command to physical or emulated transport
+    globalPrinterController.triggerCashDrawer().catch(() => {});
 
     // Auto close simulation after 4 seconds
     setTimeout(() => {
@@ -157,6 +164,80 @@ class HardwareBridgeBus {
     this.emitEvent('CUSTOMER_DISPLAY_UPDATED', { activeText, subtotalText });
   }
 
+
+  // Compiles exact binary ESC/POS byte sequence for thermal printer dispatch
+  public compileBinaryReceipt(order: {
+    orderNumber: string;
+    branchNameAr: string;
+    branchNameEn: string;
+    vatNumber: string;
+    cashierName: string;
+    items: { nameAr: string; nameEn: string; quantity: number; unitPrice: number; totalPrice: number }[];
+    subtotal: number;
+    discount: number;
+    vatAmount: number;
+    total: number;
+    paymentMethod: string;
+    dateStr: string;
+    zatcaQrPayload?: string;
+  }): Uint8Array {
+    const compiler = new EscPosByteCompiler();
+    compiler
+      .init()
+      .align('CENTER')
+      .bold(true)
+      .textLine(order.branchNameAr)
+      .textLine(order.branchNameEn)
+      .bold(false)
+      .textLine(`VAT: ${order.vatNumber}`)
+      .textLine('------------------------------------------')
+      .align('LEFT')
+      .textLine(`Invoice: ${order.orderNumber}`)
+      .textLine(`Date   : ${order.dateStr}`)
+      .textLine(`Cashier: ${order.cashierName}`)
+      .textLine('------------------------------------------')
+      .textLine('Item                 Qty   Price   Total')
+      .textLine('------------------------------------------');
+
+    order.items.forEach(item => {
+      const name = (item.nameAr || item.nameEn).padEnd(18).substring(0, 18);
+      const qty = item.quantity.toString().padStart(4);
+      const price = item.unitPrice.toFixed(2).padStart(7);
+      const total = item.totalPrice.toFixed(2).padStart(8);
+      compiler.textLine(`${name} ${qty} ${price} ${total}`);
+    });
+
+    compiler
+      .textLine('------------------------------------------')
+      .align('RIGHT')
+      .textLine(`Subtotal: SAR ${order.subtotal.toFixed(2)}`);
+
+    if (order.discount > 0) {
+      compiler.textLine(`Discount: -SAR ${order.discount.toFixed(2)}`);
+    }
+
+    compiler
+      .textLine(`VAT (15%): SAR ${order.vatAmount.toFixed(2)}`)
+      .bold(true)
+      .textLine(`TOTAL: SAR ${order.total.toFixed(2)}`)
+      .bold(false)
+      .textLine(`Payment: ${order.paymentMethod}`)
+      .textLine('------------------------------------------')
+      .align('CENTER');
+
+    if (order.zatcaQrPayload) {
+      compiler.qrCode(order.zatcaQrPayload, 6);
+    }
+
+    compiler
+      .feed(2)
+      .textLine('Thank you for your visit!')
+      .textLine('شكراً لزيارتكم')
+      .feed(3)
+      .cut(true);
+
+    return compiler.build();
+  }
 
   // ESC/POS Formatter to generate formatted raw text/thermal layout
   public formatEscPosReceipt(order: {
