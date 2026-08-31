@@ -6,6 +6,28 @@ import { VectorClockEngine, OutboxSyncEngine } from '../server/sync/outboxEngine
 import { Order, InventoryItem } from '../types';
 
 describe('Zero-Trust Multi-Tenant Security & Context Pipeline', () => {
+  it('fails closed outside an explicit AsyncLocalStorage tenant context', () => {
+    expect(TenantContextHolder.get()).toBeUndefined();
+    expect(() => TenantContextHolder.getTenantId()).toThrow(/context is required/);
+    expect(() => TenantContextHolder.setTenantId('TENANT-LEAK')).toThrow(/context is required/);
+    expect(TenantContextHolder.get()).toBeUndefined();
+  });
+
+  it('does not permit a request-scoped tenant context to be changed or leaked', async () => {
+    await TenantContextHolder.run({
+      tenantId: 'TENANT-001',
+      userId: 'usr-1',
+      roles: ['cashier'],
+      permissions: ['orders:read'],
+      correlationId: 'corr-isolation',
+    }, async () => {
+      expect(() => TenantContextHolder.setTenantId('TENANT-002')).toThrow(/cannot be changed/);
+      expect(TenantContextHolder.getTenantId()).toBe('TENANT-001');
+    });
+
+    expect(TenantContextHolder.get()).toBeUndefined();
+  });
+
   it('isolates tenant context cleanly across asynchronous boundaries', async () => {
     const ctx1: ITenantContext = {
       tenantId: 'TENANT-001',

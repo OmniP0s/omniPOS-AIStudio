@@ -166,6 +166,7 @@ import { db } from './connection';
 import { PostgresOrderRepository, PostgresInventoryRepository, PostgresShiftRepository } from './postgresRepositories';
 import { PostgresOutboxService } from './postgresOutboxService';
 import { PostgresUnitOfWork } from './unitOfWork';
+import { TransactionClientContext } from './transactionContext';
 import { IOutboxService } from '../../domain/contracts/outbox';
 import { OutboxSyncEngine } from '../sync/outboxEngine';
 import { IConsumerIdempotencyService } from '../../domain/contracts/outbox';
@@ -190,7 +191,7 @@ export class TenantRepositoryFactory {
   public static getOrderRepository(): IOrderRepository {
     this.checkProductionGuard();
     if (db.isConfigured()) {
-      return new PostgresOrderRepository();
+      return new PostgresOrderRepository(TransactionClientContext.getClient());
     }
     return new MultiTenantOrderRepository();
   }
@@ -198,7 +199,7 @@ export class TenantRepositoryFactory {
   public static getInventoryRepository(): IInventoryRepository {
     this.checkProductionGuard();
     if (db.isConfigured()) {
-      return new PostgresInventoryRepository();
+      return new PostgresInventoryRepository(TransactionClientContext.getClient());
     }
     return new MultiTenantInventoryRepository();
   }
@@ -206,7 +207,7 @@ export class TenantRepositoryFactory {
   public static getShiftRepository(): IShiftRepository {
     this.checkProductionGuard();
     if (db.isConfigured()) {
-      return new PostgresShiftRepository();
+      return new PostgresShiftRepository(TransactionClientContext.getClient());
     }
     return new MultiTenantShiftRepository();
   }
@@ -214,7 +215,7 @@ export class TenantRepositoryFactory {
   public static getOutboxService(): IOutboxService {
     this.checkProductionGuard();
     if (db.isConfigured()) {
-      return new PostgresOutboxService();
+      return new PostgresOutboxService(TransactionClientContext.getClient());
     }
     return this.defaultOutboxService;
   }
@@ -222,7 +223,7 @@ export class TenantRepositoryFactory {
   public static getConsumerIdempotencyService(): IConsumerIdempotencyService {
     this.checkProductionGuard();
     if (db.isConfigured()) {
-      return new PostgresConsumerIdempotencyService();
+      return new PostgresConsumerIdempotencyService(TransactionClientContext.getClient());
     }
     return this.defaultConsumerIdempotencyService;
   }
@@ -232,4 +233,3 @@ export class TenantRepositoryFactory {
     return new PostgresUnitOfWork(tenantId);
   }
 }
-
