@@ -27,7 +27,7 @@ import {
 import { createZatcaInvoicePayload } from '../domain/zatca/zatcaEngine';
 import { globalOutbox } from '../domain/crdt/outboxSync';
 import { globalHardwareBridge } from '../domain/hardware/hardwareBridge';
-import { Money } from '../domain/financial/money';
+import { Money, CurrencyCode } from '../domain/financial/money';
 import { VectorClockEngine, OutboxSyncEngine } from '../server/sync/outboxEngine';
 import { ZatcaCryptoSigner } from '../domain/zatca/cryptoSigner';
 import { globalIndexedDb } from '../domain/persistence/indexedDbStorage';
@@ -53,7 +53,8 @@ export const globalOutboxEngine = new OutboxSyncEngine();
 export function calculateOrderTotals(
   items: OrderItem[],
   discountAmount: number = 0,
-  taxRate: number = 0.15
+  taxRate: number = 0.15,
+  currency: CurrencyCode = 'SAR'
 ): {
   subtotal: number;
   discountAmount: number;
@@ -62,13 +63,13 @@ export function calculateOrderTotals(
   totalAmount: number;
   calculatedItems: OrderItem[];
 } {
-  let subtotalMoney = Money.zero('SAR');
+  let subtotalMoney = Money.zero(currency);
   
   const calculatedItems = items.map(item => {
-    const basePriceMoney = Money.fromMajor(item.unitPrice || 0, 'SAR');
+    const basePriceMoney = Money.fromMajor(item.unitPrice || 0, currency);
     const modifierTotalMoney = (item.selectedModifiers || []).reduce(
-      (acc, mod) => acc.add(Money.fromMajor(mod.price || 0, 'SAR')),
-      Money.zero('SAR')
+      (acc, mod) => acc.add(Money.fromMajor(mod.price || 0, currency)),
+      Money.zero(currency)
     );
     
     const singleUnitPriceMoney = basePriceMoney.add(modifierTotalMoney);
@@ -84,10 +85,10 @@ export function calculateOrderTotals(
     };
   });
 
-  const discountMoney = Money.fromMajor(Math.max(0, discountAmount), 'SAR');
+  const discountMoney = Money.fromMajor(Math.max(0, discountAmount), currency);
   const netPayableMoney = subtotalMoney.greaterThanOrEqual(discountMoney)
     ? subtotalMoney.subtract(discountMoney)
-    : Money.zero('SAR');
+    : Money.zero(currency);
 
   const orderTaxInfo = netPayableMoney.calculateTax(taxRate, true);
 
@@ -782,6 +783,9 @@ class PosStateManager {
   public activeOrder: Order | null = null;
 
   private tenant: TenantConfig = initialTenant;
+  private get currency(): CurrencyCode {
+    return (this.tenant.currency as CurrencyCode) || 'SAR';
+  }
   private categories: Category[] = initialCategories;
   private modifierGroups: ModifierGroup[] = initialModifierGroups;
   private menuItems: MenuItem[] = initialMenuItems;
@@ -1332,4 +1336,3 @@ class PosStateManager {
 }
 
 export const posStore = new PosStateManager();
-

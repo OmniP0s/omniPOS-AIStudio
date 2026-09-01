@@ -3,7 +3,7 @@
 
 import { Decimal, RoundingMode } from './decimal';
 
-export type CurrencyCode = 'SAR' | 'USD' | 'AED' | 'KWD' | 'BHD' | 'OMR' | 'EUR' | 'GBP';
+export type CurrencyCode = 'SAR' | 'EGP' | 'USD' | 'AED' | 'KWD' | 'BHD' | 'OMR' | 'EUR' | 'GBP';
 
 export interface CurrencyMeta {
   code: CurrencyCode;
@@ -16,6 +16,7 @@ export interface CurrencyMeta {
 
 export const CURRENCY_REGISTRY: Record<CurrencyCode, CurrencyMeta> = {
   SAR: { code: 'SAR', nameEn: 'Saudi Riyal', nameAr: 'ريال سعودي', symbol: 'SAR', symbolAr: 'ر.س', minorUnits: 2 },
+  EGP: { code: 'EGP', nameEn: 'Egyptian Pound', nameAr: 'جنيه مصري', symbol: 'E£', symbolAr: 'ج.م', minorUnits: 2 },
   AED: { code: 'AED', nameEn: 'UAE Dirham', nameAr: 'درهم إماراتي', symbol: 'AED', symbolAr: 'د.إ', minorUnits: 2 },
   USD: { code: 'USD', nameEn: 'US Dollar', nameAr: 'دولار أمريكي', symbol: '$', symbolAr: '$', minorUnits: 2 },
   EUR: { code: 'EUR', nameEn: 'Euro', nameAr: 'يورو', symbol: '€', symbolAr: '€', minorUnits: 2 },
