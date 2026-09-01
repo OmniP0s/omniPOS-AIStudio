@@ -36,6 +36,44 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
   onUpdateTenant,
 }) => {
   const [activeTab, setActiveTab] = useState<'COMPANY' | 'BRANDS' | 'DEVICES' | 'LICENSE' | 'FLAGS' | 'LOCALIZATION'>('COMPANY');
+  const [form, setForm] = useState({
+    legalNameAr: tenant.legalNameAr,
+    legalNameEn: tenant.legalNameEn,
+    vatNumber: tenant.vatNumber,
+    crNumber: tenant.crNumber,
+    taxRate: tenant.taxRate,
+    municipalityFeeRate: tenant.municipalityFeeRate,
+    currency: tenant.currency as string,
+    currencyDecimals: 2,
+  });
+  const [companyFormError, setCompanyFormError] = useState<string | null>(null);
+  const [companyFormSaved, setCompanyFormSaved] = useState(false);
+
+  const presetCurrencies = ['SAR', 'EGP', 'USD', 'AED'];
+  const usesCustomCurrency = !presetCurrencies.includes(form.currency);
+
+  const saveCompanySettings = () => {
+    const taxPercent = form.taxRate * 100;
+    const currency = form.currency.trim().toUpperCase();
+
+    if (!/^\d{15}$/.test(form.vatNumber.trim())) {
+      setCompanyFormError(isArabic ? 'يجب أن يتكون الرقم الضريبي من 15 رقماً.' : 'VAT number must contain exactly 15 digits.');
+      return;
+    }
+    if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
+      setCompanyFormError(isArabic ? 'يجب أن تكون نسبة الضريبة بين 0 و100.' : 'Tax rate must be between 0 and 100.');
+      return;
+    }
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      setCompanyFormError(isArabic ? 'يجب أن يتكون رمز العملة من 3 أحرف إنجليزية كبيرة.' : 'Currency code must contain exactly 3 uppercase letters.');
+      return;
+    }
+
+    setCompanyFormError(null);
+    onUpdateTenant({ ...form, currency: currency as TenantConfig['currency'] });
+    setCompanyFormSaved(true);
+    window.setTimeout(() => setCompanyFormSaved(false), 2000);
+  };
 
   const [brands, setBrands] = useState<Brand[]>([
     {
@@ -238,8 +276,8 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 </label>
                 <input
                   type="text"
-                  readOnly
-                  value={tenant.legalNameAr}
+                  value={form.legalNameAr}
+                  onChange={event => setForm(current => ({ ...current, legalNameAr: event.target.value }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                 />
               </div>
@@ -250,8 +288,8 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 </label>
                 <input
                   type="text"
-                  readOnly
-                  value={tenant.legalNameEn}
+                  value={form.legalNameEn}
+                  onChange={event => setForm(current => ({ ...current, legalNameEn: event.target.value }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                 />
               </div>
@@ -262,8 +300,9 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 </label>
                 <input
                   type="text"
-                  readOnly
-                  value={tenant.vatNumber}
+                  inputMode="numeric"
+                  value={form.vatNumber}
+                  onChange={event => setForm(current => ({ ...current, vatNumber: event.target.value }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold text-indigo-600"
                 />
               </div>
@@ -274,8 +313,8 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 </label>
                 <input
                   type="text"
-                  readOnly
-                  value={tenant.crNumber}
+                  value={form.crNumber}
+                  onChange={event => setForm(current => ({ ...current, crNumber: event.target.value }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
                 />
               </div>
@@ -285,11 +324,17 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                   {isArabic ? 'نسبة ضريبة القيمة المضافة القياسية' : 'Standard VAT Rate'}
                 </label>
                 <input
-                  type="text"
-                  readOnly
-                  value="15% (Saudi Standard)"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.taxRate * 100}
+                  onChange={event => setForm(current => ({ ...current, taxRate: Number(event.target.value) / 100 }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold text-emerald-600"
                 />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {isArabic ? 'أدخل نسبة الضريبة حسب بلدك (مثال: السعودية 15، مصر 14)' : 'Enter the tax rate for your country (for example: Saudi Arabia 15, Egypt 14).'}
+                </p>
               </div>
 
               <div>
@@ -297,16 +342,83 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                   {isArabic ? 'رسوم البلدية للتبغ / المطاعم الراقية' : 'Municipality Fee Rate'}
                 </label>
                 <input
-                  type="text"
-                  readOnly
-                  value="5% (Applicable on special services)"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.municipalityFeeRate * 100}
+                  onChange={event => setForm(current => ({ ...current, municipalityFeeRate: Number(event.target.value) / 100 }))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                 />
               </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {isArabic ? 'العملة' : 'Currency'}
+                </label>
+                <select
+                  value={usesCustomCurrency ? 'OTHER' : form.currency}
+                  onChange={event => setForm(current => ({ ...current, currency: event.target.value === 'OTHER' ? '' : event.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                >
+                  <option value="SAR">SAR ر.س</option>
+                  <option value="EGP">EGP ج.م</option>
+                  <option value="USD">USD $</option>
+                  <option value="AED">AED د.إ</option>
+                  <option value="OTHER">{isArabic ? 'أخرى' : 'Other'}</option>
+                </select>
+              </div>
+
+              {usesCustomCurrency && (
+                <>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      {isArabic ? 'رمز العملة المخصص' : 'Custom Currency Code'}
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      value={form.currency}
+                      onChange={event => setForm(current => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      {isArabic ? 'عدد الكسور العشرية للعملة' : 'Currency Decimal Places'}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="3"
+                      value={form.currencyDecimals}
+                      onChange={event => setForm(current => ({ ...current, currencyDecimals: Number(event.target.value) }))}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
+            <p className="text-[11px] text-slate-500">
+              {isArabic
+                ? 'ملاحظة: يُحفظ إعداد العملة فقط، ولا يغيّر أي منطق حسابي.'
+                : 'Note: This saves the currency setting only and does not change any calculation logic.'}
+            </p>
+
+            {companyFormError && <p role="alert" className="text-xs font-bold text-red-600">{companyFormError}</p>}
+            {companyFormSaved && (
+              <p role="status" className="text-xs font-bold text-emerald-600">
+                {isArabic ? 'تم حفظ الإعدادات ✓' : 'Settings saved ✓'}
+              </p>
+            )}
+
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-              <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={saveCompanySettings}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 flex items-center gap-1.5"
+              >
                 <Check className="w-4 h-4" />
                 {isArabic ? 'حفظ وتحديث السجلات' : 'Save & Publish Organization Info'}
               </button>
