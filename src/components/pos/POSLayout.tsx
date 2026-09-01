@@ -160,7 +160,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
     setCurrentOrderItems(prev => [...prev, newItem]);
     globalHardwareBridge.updateCustomerDisplay(
       `Added: ${isArabic ? item.nameAr : item.nameEn}`,
-      `Total: SAR ${(finalTotal + lineTotal).toFixed(2)}`
+      `Total: ${currency} ${(finalTotal + lineTotal).toFixed(2)}`
     );
   };
 
@@ -502,7 +502,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
                 <option value="">{isArabic ? 'عميل عام (Walk-in)' : 'Walk-in Guest'}</option>
                 {customers.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} ({c.loyaltyTier} - {c.walletBalance} SAR)
+                    {c.name} ({c.loyaltyTier} - {c.walletBalance} {currency})
                   </option>
                 ))}
               </select>
@@ -626,7 +626,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
               </div>
             )}
             <div className="flex justify-between">
-              <span>{isArabic ? 'ضريبة القيمة المضافة (15%)' : 'VAT (15%)'}:</span>
+              <span>{isArabic ? `ضريبة القيمة المضافة (${Number((tenant.taxRate * 100).toFixed(2))}%)` : `VAT (${Number((tenant.taxRate * 100).toFixed(2))}%)`}:</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {taxAmount.toFixed(2)} {currency}
               </span>
