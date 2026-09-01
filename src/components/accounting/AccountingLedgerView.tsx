@@ -292,7 +292,7 @@ export const AccountingLedgerView: React.FC<AccountingLedgerViewProps> = ({
               {tenantBalanceSheet.assets.map(account => (
                 <div key={account.code} className="flex justify-between">
                   <span className="text-slate-500">{isArabic ? account.nameAr : account.name}</span>
-                  <span>SAR {account.amount.formatMajor()}</span>
+                  <span>SAR {account.amount.toMajor().toFixed(2)}</span>
                 </div>
               ))}
               <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold text-emerald-600">
@@ -308,13 +308,13 @@ export const AccountingLedgerView: React.FC<AccountingLedgerViewProps> = ({
               {tenantBalanceSheet.liabilities.map(account => (
                 <div key={account.code} className="flex justify-between">
                   <span className="text-slate-500">{isArabic ? account.nameAr : account.name}</span>
-                  <span>SAR {account.amount.formatMajor()}</span>
+                  <span>SAR {account.amount.toMajor().toFixed(2)}</span>
                 </div>
               ))}
               {tenantBalanceSheet.equity.map(account => (
                 <div key={account.code} className="flex justify-between">
                   <span className="text-slate-500">{isArabic ? account.nameAr : account.name}</span>
-                  <span>SAR {account.amount.formatMajor()}</span>
+                  <span>SAR {account.amount.toMajor().toFixed(2)}</span>
                 </div>
               ))}
               <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold text-indigo-600">
