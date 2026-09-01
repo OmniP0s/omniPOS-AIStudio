@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ChartOfAccount, JournalEntry, User } from '../../types';
-import { globalAccounting } from '../../domain/accounting/accountingEngine';
+import { User } from '../../types';
+import { getAccountingServices } from '../../domain/accounting/accountingEngine';
 import {
   BookOpen,
   FileText,
@@ -18,19 +18,55 @@ import {
 interface AccountingLedgerViewProps {
   isArabic: boolean;
   activeUser: User;
+  tenantId?: string;
 }
 
 export const AccountingLedgerView: React.FC<AccountingLedgerViewProps> = ({
   isArabic,
   activeUser,
+  tenantId,
 }) => {
   const [activeTab, setActiveTab] = useState<'COA' | 'JOURNALS' | 'P_AND_L' | 'BALANCE_SHEET' | 'ZATCA_VAT'>('COA');
 
-  const coa = globalAccounting.getChartOfAccounts();
-  const journals = globalAccounting.getJournalEntries();
-  const pnl = globalAccounting.generateProfitAndLoss();
-  const balanceSheet = globalAccounting.generateBalanceSheet();
-  const vatReturn = globalAccounting.generateVatReturn('Q3 2026');
+  if (!tenantId) {
+    return <div role="alert">403 TENANT_CONTEXT_REQUIRED</div>;
+  }
+
+  const accounting = getAccountingServices(tenantId);
+  const coa = accounting.engine.getAccounts(tenantId).map(account => ({
+    ...account,
+    balance: account.balance.toMajor(),
+  }));
+  const journals = accounting.engine.getEntries(tenantId).map(entry => ({
+    ...entry,
+    lines: entry.lines.map(line => ({
+      ...line,
+      debit: line.debit.toMajor(),
+      credit: line.credit.toMajor(),
+    })),
+  }));
+  const tenantPnl = accounting.reporting.generateProfitAndLoss(tenantId);
+  const pnl = {
+    revenue: tenantPnl.netRevenue.toMajor(),
+    cogs: tenantPnl.totalCogs.toMajor(),
+    grossProfit: tenantPnl.grossProfit.toMajor(),
+    expenses: tenantPnl.totalExpenses.toMajor(),
+    netProfit: tenantPnl.netOperatingIncome.toMajor(),
+  };
+  const tenantBalanceSheet = accounting.reporting.generateBalanceSheet(tenantId);
+  const balanceSheet = {
+    totalAssets: tenantBalanceSheet.totalAssets.toMajor(),
+    totalLiabilities: tenantBalanceSheet.totalLiabilities.toMajor(),
+    totalEquity: tenantBalanceSheet.totalEquity.toMajor(),
+  };
+  const tenantVatReturn = accounting.reporting.generateZatcaVatReturn(tenantId, 'Q3 2026');
+  const vatReturn = {
+    standardRatedSalesSar: tenantVatReturn.standardRatedSales.toMajor(),
+    standardRatedOutputVatSar: tenantVatReturn.standardRatedOutputVat.toMajor(),
+    standardRatedPurchasesSar: tenantVatReturn.standardRatedPurchases.toMajor(),
+    standardRatedInputVatSar: tenantVatReturn.standardRatedInputVat.toMajor(),
+    netVatDueSar: tenantVatReturn.netVatDue.toMajor(),
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -164,7 +200,7 @@ export const AccountingLedgerView: React.FC<AccountingLedgerViewProps> = ({
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-bold text-indigo-600">{entry.entryNumber}</span>
-                    <span className="font-bold text-slate-900 dark:text-white">{entry.memo || entry.description}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{entry.memo}</span>
                   </div>
                   <span className="text-slate-400 font-mono text-[11px]">{entry.date}</span>
                 </div>

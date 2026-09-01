@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { TenantRepositoryFactory } from "../src/server/db/tenantRepository";
 import { TenantContextHolder } from "../src/server/security/tenantContext";
 import { OutboxRelayWorker } from "../src/server/sync/outboxRelayWorker";
-import { DoubleEntryEngine, FinancialReportingService } from "../src/domain/accounting";
+import { getAccountingServices } from "../src/domain/accounting";
 import { CsidLifecycleManager } from "../src/domain/zatca";
 import { Money } from "../src/domain/financial/money";
 
@@ -195,21 +195,6 @@ enterpriseRouter.post("/api/sync/outbox/dispatch", async (req: Request, res: Res
 });
 
 const serverCsidManager = new CsidLifecycleManager();
-
-const accountingByTenant = new Map<string, {
-  engine: DoubleEntryEngine;
-  reporting: FinancialReportingService;
-}>();
-
-function getAccountingServices(tenantId: string) {
-  let services = accountingByTenant.get(tenantId);
-  if (!services) {
-    const engine = new DoubleEntryEngine(tenantId);
-    services = { engine, reporting: new FinancialReportingService(engine) };
-    accountingByTenant.set(tenantId, services);
-  }
-  return services;
-}
 
 // ==========================================
 // ZATCA Phase 2 E-Invoicing Endpoints

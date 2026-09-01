@@ -2,7 +2,8 @@
 import { TestCaseResult } from '../../types';
 import { encodeZatcaTLV, calculateSha256, createZatcaInvoicePayload } from '../zatca/zatcaEngine';
 import { VectorClock } from '../crdt/outboxSync';
-import { globalAccounting } from '../accounting/accountingEngine';
+import { getAccountingServices } from '../accounting/accountingEngine';
+import { Money } from '../financial/money';
 import { globalMenuEngine } from '../menu/menuEngine';
 import { globalLoyaltyEngine } from '../customer/loyaltyEngine';
 import { globalSecurityEngine } from '../security/securityEngine';
@@ -139,6 +140,8 @@ export async function runEnterpriseTestSuite(): Promise<TestCaseResult[]> {
 
   // 3. Accounting & General Ledger Tests
   await addTest('UNIT', 'Double Entry Balance (Debits == Credits on Order Sale)', () => {
+    const tenantId = 'tenant-enterprise-test-suite';
+    const accounting = getAccountingServices(tenantId);
     const mockOrder: any = {
       orderNumber: '#ORD-TEST-GL',
       orderType: 'DINE_IN',
@@ -148,17 +151,33 @@ export async function runEnterpriseTestSuite(): Promise<TestCaseResult[]> {
       discountAmount: 0,
       payments: [{ method: 'MADA', amount: 230 }],
     };
-    const entry = globalAccounting.recordOrderSale(mockOrder, 'branch-01');
-    const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0);
-    const totalCredit = entry.lines.reduce((s, l) => s + l.credit, 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      throw new Error(`Double entry unbalanced: Debit ${totalDebit} vs Credit ${totalCredit}`);
+    const entry = accounting.postings.postOrderSale({
+      tenantId,
+      branchId: 'branch-01',
+      orderNumber: mockOrder.orderNumber,
+      orderId: 'ord-enterprise-test-suite',
+      orderType: mockOrder.orderType,
+      subtotal: Money.fromMajor(mockOrder.taxableAmount),
+      discountAmount: Money.fromMajor(mockOrder.discountAmount),
+      taxableAmount: Money.fromMajor(mockOrder.taxableAmount),
+      vatAmount: Money.fromMajor(mockOrder.taxAmount),
+      totalAmount: Money.fromMajor(mockOrder.totalAmount),
+      payments: mockOrder.payments.map((payment: any) => ({
+        method: payment.method,
+        amount: Money.fromMajor(payment.amount),
+      })),
+    });
+    const totalDebit = entry.lines.reduce((sum, line) => sum.add(line.debit), Money.zero('SAR'));
+    const totalCredit = entry.lines.reduce((sum, line) => sum.add(line.credit), Money.zero('SAR'));
+    if (!totalDebit.equals(totalCredit)) {
+      throw new Error(`Double entry unbalanced: Debit ${totalDebit.formatMajor()} vs Credit ${totalCredit.formatMajor()}`);
     }
   });
 
   await addTest('UNIT', 'ZATCA 15% Standard VAT Calculation Formula', () => {
-    const vatReturn = globalAccounting.generateVatReturn('Q3 2026');
-    if (vatReturn.standardRatedOutputVatSar <= 0) {
+    const tenantId = 'tenant-enterprise-vat-test-suite';
+    const vatReturn = getAccountingServices(tenantId).reporting.generateZatcaVatReturn(tenantId, 'Q3 2026');
+    if (!vatReturn.standardRatedOutputVat.isPositive()) {
       throw new Error('VAT return output computation failed');
     }
   });
@@ -762,4 +781,3 @@ export async function runEnterpriseTestSuite(): Promise<TestCaseResult[]> {
 
   return results;
 }
-
