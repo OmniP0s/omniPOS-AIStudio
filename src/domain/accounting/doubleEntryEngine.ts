@@ -93,12 +93,17 @@ export class DoubleEntryEngine {
 
   public initializeTenantAccounts(tenantId: string): void {
     for (const item of DEFAULT_CHART_OF_ACCOUNTS) {
+      const accountKey = `${tenantId}:${item.code}`;
+      // Preserve any existing account (and its accrued balance) — never overwrite.
+      if (this.accounts.has(accountKey)) {
+        continue;
+      }
       const coa: ChartOfAccountModel = {
         ...item,
         tenantId,
         id: `${item.id}-${tenantId}`,
       };
-      this.accounts.set(`${tenantId}:${item.code}`, coa);
+      this.accounts.set(accountKey, coa);
     }
   }
 
