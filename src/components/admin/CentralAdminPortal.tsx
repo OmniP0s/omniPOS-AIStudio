@@ -339,7 +339,7 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
 
               <div>
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  {isArabic ? 'رسوم البلدية للتبغ / المطاعم الراقية' : 'Municipality Fee Rate'}
+                  {isArabic ? 'نسبة رسوم البلدية %' : 'Municipality Fee Rate %'}
                 </label>
                 <input
                   type="number"
@@ -714,7 +714,7 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value="Asia/Riyadh (UTC+03:00)"
+                  value={tenant.timeZone}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
                 />
               </div>
@@ -724,7 +724,7 @@ export const CentralAdminPortal: React.FC<CentralAdminPortalProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value="SAR - Saudi Arabian Riyal (ر.س)"
+                  value={tenant.currency}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                 />
               </div>
