@@ -1154,7 +1154,7 @@ class PosStateManager {
     }
 
     this.saveOrder(order);
-    this.addAuditLog('ORDER_PAYMENT', 'POS', `Order ${order.orderNumber} paid ${tx.amount} SAR via ${paymentMethod}. ZATCA Status: ${order.zatcaStatus}`);
+    this.addAuditLog('ORDER_PAYMENT', 'POS', `Order ${order.orderNumber} paid ${tx.amount} ${this.currency} via ${paymentMethod}. ZATCA Status: ${order.zatcaStatus}`);
 
     // Post Automated Double-Entry Journal Entry for Sale
     try {
@@ -1177,7 +1177,7 @@ class PosStateManager {
     }
 
     // Update Customer Display
-    globalHardwareBridge.updateCustomerDisplay('Payment Successful! Thank you.', `Total: SAR ${order.totalAmount.toFixed(2)}`);
+    globalHardwareBridge.updateCustomerDisplay('Payment Successful! Thank you.', `Total: ${this.currency} ${order.totalAmount.toFixed(2)}`);
 
     return { order, zatcaResult };
   }
@@ -1240,7 +1240,7 @@ class PosStateManager {
       this.shift.expectedCash -= amount;
     }
 
-    this.addAuditLog('CASH_ADJUSTMENT', 'SHIFT', `${type} of SAR ${amount} recorded for reason: ${reason}`);
+    this.addAuditLog('CASH_ADJUSTMENT', 'SHIFT', `${type} of ${this.currency} ${amount} recorded for reason: ${reason}`);
     this.persist();
   }
 
@@ -1266,7 +1266,7 @@ class PosStateManager {
       console.warn('[PosStateManager] Shift settlement journal posting notice:', settleErr);
     }
 
-    this.addAuditLog('SHIFT_CLOSE', 'SHIFT', `Shift ${this.shift.shiftNumber} closed with difference of SAR ${this.shift.cashDifference.toFixed(2)}`);
+    this.addAuditLog('SHIFT_CLOSE', 'SHIFT', `Shift ${this.shift.shiftNumber} closed with difference of ${this.currency} ${this.shift.cashDifference.toFixed(2)}`);
     this.persist();
     return this.shift;
   }
@@ -1300,7 +1300,7 @@ class PosStateManager {
     }
 
     this.saveOrder(order);
-    this.addAuditLog('ORDER_REFUND', 'POS', `Order ${order.orderNumber} refunded (SAR ${order.totalAmount}). Reason: ${reason}`);
+    this.addAuditLog('ORDER_REFUND', 'POS', `Order ${order.orderNumber} refunded (${this.currency} ${order.totalAmount}). Reason: ${reason}`);
     return order;
   }
 
