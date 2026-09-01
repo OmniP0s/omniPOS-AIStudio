@@ -1034,17 +1034,17 @@ class PosStateManager {
     const order = this.orders.find(o => o.id === orderId);
     if (!order) throw new Error('Order not found');
 
-    const totalMoney = Money.fromMajor(order.totalAmount, 'SAR');
-    const existingPaidMoney = Money.fromMajor(order.paidAmount, 'SAR');
+    const totalMoney = Money.fromMajor(order.totalAmount, this.currency);
+    const existingPaidMoney = Money.fromMajor(order.paidAmount, this.currency);
     const balanceMoney = totalMoney.greaterThan(existingPaidMoney)
       ? totalMoney.subtract(existingPaidMoney)
-      : Money.zero('SAR');
+      : Money.zero(this.currency);
 
-    const tipMoney = Money.fromMajor(tipAmount, 'SAR');
-    const tenderedMoney = Money.fromMajor(tenderedAmount, 'SAR');
+    const tipMoney = Money.fromMajor(tipAmount, this.currency);
+    const tenderedMoney = Money.fromMajor(tenderedAmount, this.currency);
     
     // Exact change calculation with Money
-    let changeGivenMoney = Money.zero('SAR');
+    let changeGivenMoney = Money.zero(this.currency);
     if (paymentMethod === 'CASH' && tenderedMoney.greaterThan(balanceMoney)) {
       changeGivenMoney = tenderedMoney.subtract(balanceMoney);
     }
@@ -1070,7 +1070,7 @@ class PosStateManager {
     const updatedPaidMoney = existingPaidMoney.add(balanceMoney);
     order.paidAmount = updatedPaidMoney.toNumber();
     order.balanceAmount = 0;
-    order.tipAmount = Money.fromMajor(order.tipAmount, 'SAR').add(tipMoney).toNumber();
+    order.tipAmount = Money.fromMajor(order.tipAmount, this.currency).add(tipMoney).toNumber();
 
     order.paymentStatus = 'PAID';
     order.status = 'COMPLETED';
@@ -1085,7 +1085,7 @@ class PosStateManager {
       if (customer) {
         const pointsEarned = Math.floor(order.totalAmount * 1.5);
         customer.loyaltyPoints += pointsEarned;
-        customer.totalSpend = Money.fromMajor(customer.totalSpend, 'SAR').add(totalMoney).toNumber();
+        customer.totalSpend = Money.fromMajor(customer.totalSpend, this.currency).add(totalMoney).toNumber();
         customer.visitCount += 1;
         customer.lastVisit = new Date().toISOString();
 
@@ -1096,31 +1096,31 @@ class PosStateManager {
 
         // If paid with wallet, debit balance safely
         if (paymentMethod === 'WALLET') {
-          const walletMoney = Money.fromMajor(customer.walletBalance, 'SAR');
+          const walletMoney = Money.fromMajor(customer.walletBalance, this.currency);
           const remainingWallet = walletMoney.greaterThan(balanceMoney)
             ? walletMoney.subtract(balanceMoney)
-            : Money.zero('SAR');
+            : Money.zero(this.currency);
           customer.walletBalance = remainingWallet.toNumber();
         }
       }
     }
 
     // Update Shift figures using Money precision
-    this.shift.totalSales = Money.fromMajor(this.shift.totalSales, 'SAR').add(totalMoney).toNumber();
-    this.shift.totalVat = Money.fromMajor(this.shift.totalVat, 'SAR').add(Money.fromMajor(order.taxAmount, 'SAR')).toNumber();
-    this.shift.totalDiscounts = Money.fromMajor(this.shift.totalDiscounts, 'SAR').add(Money.fromMajor(order.discountAmount, 'SAR')).toNumber();
+    this.shift.totalSales = Money.fromMajor(this.shift.totalSales, this.currency).add(totalMoney).toNumber();
+    this.shift.totalVat = Money.fromMajor(this.shift.totalVat, this.currency).add(Money.fromMajor(order.taxAmount, this.currency)).toNumber();
+    this.shift.totalDiscounts = Money.fromMajor(this.shift.totalDiscounts, this.currency).add(Money.fromMajor(order.discountAmount, this.currency)).toNumber();
     this.shift.totalOrders += 1;
 
     if (paymentMethod === 'CASH') {
-      this.shift.cashSales = Money.fromMajor(this.shift.cashSales, 'SAR').add(balanceMoney).toNumber();
-      this.shift.expectedCash = Money.fromMajor(this.shift.expectedCash, 'SAR').add(balanceMoney).toNumber();
+      this.shift.cashSales = Money.fromMajor(this.shift.cashSales, this.currency).add(balanceMoney).toNumber();
+      this.shift.expectedCash = Money.fromMajor(this.shift.expectedCash, this.currency).add(balanceMoney).toNumber();
       globalHardwareBridge.openCashDrawer('Cash Sale Completed');
     } else if (['MADA', 'VISA', 'MASTERCARD', 'APPLE_PAY'].includes(paymentMethod)) {
-      this.shift.cardSales = Money.fromMajor(this.shift.cardSales, 'SAR').add(balanceMoney).toNumber();
+      this.shift.cardSales = Money.fromMajor(this.shift.cardSales, this.currency).add(balanceMoney).toNumber();
     } else if (paymentMethod === 'WALLET') {
-      this.shift.walletSales = Money.fromMajor(this.shift.walletSales, 'SAR').add(balanceMoney).toNumber();
+      this.shift.walletSales = Money.fromMajor(this.shift.walletSales, this.currency).add(balanceMoney).toNumber();
     } else if (paymentMethod === 'GIFT_CARD') {
-      this.shift.giftCardSales = Money.fromMajor(this.shift.giftCardSales, 'SAR').add(balanceMoney).toNumber();
+      this.shift.giftCardSales = Money.fromMajor(this.shift.giftCardSales, this.currency).add(balanceMoney).toNumber();
     }
 
     // Generate ZATCA Phase 2 E-Invoice Cryptographic Payload
