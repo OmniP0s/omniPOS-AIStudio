@@ -1,4 +1,5 @@
 import { getAi } from "./aiService";
+import { aiConfig } from "../config/ai";
 
 type PosInsightsInput = {
   salesSummary: unknown;
@@ -8,7 +9,7 @@ type PosInsightsInput = {
 
 export async function generatePosInsights({ salesSummary, inventoryAlerts, context }: PosInsightsInput) {
   const ai = getAi();
-  const model = "gemini-3.7-flash";
+  const model = aiConfig.models.analytics();
   const prompt = buildPosInsightsPrompt({ salesSummary, inventoryAlerts, context });
 
   const response = await ai.models.generateContent({

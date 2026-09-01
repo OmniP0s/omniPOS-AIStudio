@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from "express";
-import { db } from "../src/server/db/connection";
 import { TenantRepositoryFactory } from "../src/server/db/tenantRepository";
 import { TenantContextHolder } from "../src/server/security/tenantContext";
 import { OutboxRelayWorker } from "../src/server/sync/outboxRelayWorker";
@@ -22,18 +21,6 @@ function requireTenant(req: Request, res: Response): string | null {
   }
   return tenantId;
 }
-
-enterpriseRouter.get("/api/db/health", async (_req: Request, res: Response) => {
-  const health = await db.healthCheck();
-  res.json({
-    database: health.connected ? "POSTGRESQL_CONNECTED" : "IN_MEMORY_ISOLATED_FALLBACK",
-    isConfigured: db.isConfigured(),
-    latencyMs: health.latencyMs ?? 0,
-    rlsEnabled: true,
-    isolationMode: "ROW_LEVEL_SECURITY_AND_SESSION_CONTEXT",
-    error: health.error,
-  });
-});
 
 // Enterprise Tenant-Scoped Orders Endpoints
 enterpriseRouter.get("/api/orders", async (req: Request, res: Response) => {
@@ -153,48 +140,6 @@ enterpriseRouter.post("/api/shifts", async (req: Request, res: Response) => {
   }
 });
 
-// Prometheus Telemetry Metrics Endpoint
-enterpriseRouter.get("/api/metrics", (_req: Request, res: Response) => {
-  const memoryUsage = process.memoryUsage();
-  res.json({
-    metrics: [
-      { name: "pos_p99_latency_ms", value: 42.5, unit: "ms", status: "HEALTHY", trend: "STABLE" },
-      { name: "pos_active_terminals", value: 18, unit: "nodes", status: "HEALTHY", trend: "STABLE" },
-      { name: "pos_crdt_sync_rate", value: 99.98, unit: "%", status: "HEALTHY", trend: "STABLE" },
-      { name: "pos_zatca_clearance_success", value: 100, unit: "%", status: "HEALTHY", trend: "STABLE" },
-      { name: "pos_heap_used_mb", value: Math.round(memoryUsage.heapUsed / 1024 / 1024), unit: "MB", status: "HEALTHY", trend: "STABLE" },
-      { name: "pos_orders_processed_today", value: 1248, unit: "orders", status: "HEALTHY", trend: "UP" },
-    ],
-    systemTime: new Date().toISOString(),
-  });
-});
-
-// Outbox & Vector Clock Conflict Resolution Sync Endpoints
-enterpriseRouter.post("/api/sync/outbox", async (req: Request, res: Response) => {
-  try {
-    const tenantId = requireTenant(req, res);
-    if (!tenantId) return;
-    const { message } = req.body;
-    if (!message || !message.id || !message.idempotencyKey) {
-      return res.status(400).json({ error: "Invalid outbox message schema: id and idempotencyKey are required" });
-    }
-
-    TenantContextHolder.setTenantId(tenantId);
-    const outboxService = TenantRepositoryFactory.getOutboxService();
-    const saved = await outboxService.enqueue(tenantId, message);
-
-    return res.json({
-      success: true,
-      message: saved,
-      serverVectorClock: { "SERVER-PRIMARY": Date.now() },
-      status: saved.status,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: err.message } });
-  }
-});
-
 enterpriseRouter.post("/api/sync/outbox/batch", async (req: Request, res: Response) => {
   try {
     const tenantId = requireTenant(req, res);
@@ -269,36 +214,6 @@ function getAccountingServices(tenantId: string) {
 // ==========================================
 // ZATCA Phase 2 E-Invoicing Endpoints
 // ==========================================
-
-// 1. ZATCA Compliance Check & Signature Validation
-enterpriseRouter.post("/api/zatca/compliance-check", (req: Request, res: Response) => {
-  try {
-    const { invoiceHash, qrBase64, ublXml, isB2B } = req.body;
-
-    if (!invoiceHash || !qrBase64) {
-      return res.status(400).json({ error: "Missing required cryptographic fields for ZATCA verification" });
-    }
-
-    const passesXsd = Boolean(ublXml && ublXml.includes("urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"));
-
-    return res.json({
-      validationStatus: "PASS",
-      zatcaPhase: "Phase 2 (Integration)",
-      invoiceType: isB2B ? "Standard Tax Invoice (0100000)" : "Simplified Tax Invoice (0200000)",
-      checks: {
-        schemaValidation: passesXsd ? "VALID_UBL_2.1" : "VALID",
-        hashChainIntegrity: "VERIFIED_SHA256",
-        ecdsaSignature: "CRYPTOGRAPHICALLY_VERIFIED",
-        qrTlvConformance: "100%_CONFORMANT_GAZT_RULES",
-        reportingWindowCompliance: "WITHIN_24_HOURS",
-      },
-      clearanceResult: isB2B ? "CLEARED_BY_ZATCA_PORTAL" : "REPORTED_SUCCESSFULLY",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
-  }
-});
 
 // 2. Generate Compliant CSR for ZATCA EGS Onboarding
 enterpriseRouter.post("/api/zatca/csr/generate", (req: Request, res: Response) => {

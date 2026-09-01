@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { getAi } from "../services/aiService";
+import { aiConfig } from "../config/ai";
+import { AiServiceError, getAi } from "../services/aiService";
 import { generatePosInsights, getPosInsightsServiceFallback } from "../services/aiInsightsService";
 
 export const postApiAiPosInsights = async (req: Request, res: Response) => {
@@ -8,6 +9,7 @@ export const postApiAiPosInsights = async (req: Request, res: Response) => {
     const insights = await generatePosInsights({ salesSummary, inventoryAlerts, context });
     return res.json(insights);
   } catch (err: unknown) {
+    if (err instanceof AiServiceError) return sendAiServiceError(res, err);
     console.error("AI Insights Error:", err);
     return res.json(getPosInsightsServiceFallback());
   }
@@ -16,14 +18,14 @@ export const postApiAiPosInsights = async (req: Request, res: Response) => {
   // Chat Endpoint (with streaming SSE support)
 export const postApiChat = async (req: Request, res: Response) => {
     try {
+      const ai = getAi();
       const { messages, systemInstruction, temperature = 0.7, stream = false } = req.body;
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: "Missing or invalid messages array." });
       }
 
-      const ai = getAi();
-      const model = "gemini-3.7-flash";
+      const model = aiConfig.models.chat();
 
       const formattedContents = messages.map((m: { role: string; content: string }) => ({
         role: m.role === "assistant" ? "model" : "user",
@@ -67,6 +69,7 @@ export const postApiChat = async (req: Request, res: Response) => {
         return res.json({ text: reply });
       }
     } catch (error: unknown) {
+      if (error instanceof AiServiceError) return sendAiServiceError(res, error);
       console.error("Gemini Chat Error:", error);
       const errMsg = error instanceof Error ? error.message : "حدث خطأ أثناء معالجة الطلب في خادم الذكاء الاصطناعي.";
       if (req.body.stream && !res.headersSent) {
@@ -82,9 +85,9 @@ export const postApiChat = async (req: Request, res: Response) => {
   // Enterprise AI Gateway Route
 export const postApiAiGatewayComplete = async (req: Request, res: Response) => {
     try {
-      const { messages, modelId = "gemini-3.7-flash", temperature = 0.4 } = req.body;
+      const { messages, modelId = aiConfig.models.analytics(), temperature = 0.4 } = req.body;
       const ai = getAi();
-      const selectedModel = modelId.startsWith("gemini") ? modelId : "gemini-3.7-flash";
+      const selectedModel = typeof modelId === "string" && modelId.startsWith("gemini") ? modelId : aiConfig.models.analytics();
 
       const promptText = Array.isArray(messages)
         ? messages.map((m: any) => `${m.role}: ${m.parts ? m.parts.map((p: any) => p.text).join(" ") : ""}`).join("\n")
@@ -123,7 +126,8 @@ export const postApiAiGatewayComplete = async (req: Request, res: Response) => {
           traceId: `tr-srv-${Date.now()}`,
         },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (err instanceof AiServiceError) return sendAiServiceError(res, err);
       console.error("AI Gateway Server Route Error:", err);
       return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
@@ -135,6 +139,7 @@ export const postApiAiGatewayComplete = async (req: Request, res: Response) => {
   // 1. Executive AI Copilot
 export const postApiGenerate = async (req: Request, res: Response) => {
     try {
+      const ai = getAi();
       const { prompt, mode, tone, targetLanguage, temperature = 0.7 } = req.body;
 
       if (!prompt) {
@@ -163,9 +168,8 @@ export const postApiGenerate = async (req: Request, res: Response) => {
         userPrompt = `اقترح أفكاراً إبداعية حول الموضوع التالي:\n\n${prompt}`;
       }
 
-      const ai = getAi();
       const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: aiConfig.models.cashier(),
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
         config: {
           systemInstruction,
@@ -178,11 +182,16 @@ export const postApiGenerate = async (req: Request, res: Response) => {
         mode,
       });
     } catch (error: unknown) {
+      if (error instanceof AiServiceError) return sendAiServiceError(res, error);
       console.error("Gemini Generate Error:", error);
       const errMsg = error instanceof Error ? error.message : "حدث خطأ أثناء توليد النص.";
       return res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An internal server error occurred." } });
     }
   };
+
+function sendAiServiceError(res: Response, error: AiServiceError) {
+  return res.status(503).json({ error: { code: error.code, message: error.message } });
+}
 
   // =========================================================================
   // SPRINT 3.2: AUTONOMOUS AI AGENTS & DAG ORCHESTRATION ENDPOINTS
