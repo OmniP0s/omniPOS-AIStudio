@@ -160,8 +160,8 @@ export class SecurityPipeline {
       const correlationId = (req.header('x-correlation-id') as string) || `req-${crypto.randomUUID().slice(0, 12)}`;
       res.setHeader('x-correlation-id', correlationId);
 
-      // Public health/metrics bypass
-      if (req.path === '/api/health' || req.path === '/api/metrics' || !req.path.startsWith('/api')) {
+      // Only the liveness endpoint is public. Operational endpoints require authentication.
+      if (req.path === '/api/health' || !req.path.startsWith('/api')) {
         return next();
       }
 

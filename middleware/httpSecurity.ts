@@ -1,10 +1,21 @@
 import type { NextFunction, Request, Response } from "express";
-import { corsAllowedOrigins } from "../config/security";
+import { getCorsAllowedOrigins } from "../config/security";
+
+function isSameOrigin(req: Request, origin: string): boolean {
+  try {
+    const requestOrigin = `${req.protocol}://${req.get("host")}`;
+    return new URL(origin).origin === new URL(requestOrigin).origin;
+  } catch {
+    return false;
+  }
+}
 
 export function enforceCorsAllowlist(req: Request, res: Response, next: NextFunction) {
   const origin = req.header("origin");
   if (!origin) return next();
-  if (!corsAllowedOrigins.has(origin)) return res.status(403).json({ error: { code: "CORS_ORIGIN_DENIED", message: "Origin is not allowed." } });
+  if (!isSameOrigin(req, origin) && !getCorsAllowedOrigins().has(origin)) {
+    return res.status(403).json({ error: { code: "CORS_ORIGIN_DENIED", message: "Origin is not allowed." } });
+  }
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");

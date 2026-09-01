@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeApiRequest, evaluateAuthorization } from '../../server';
+import { authorizeApiRequest, evaluateAuthorization } from '../../middleware/security';
 
 function createResponse() {
   const res: any = {
@@ -99,5 +99,18 @@ describe('API authorization policy enforcement', () => {
       resource: 'orders',
       reason: 'TENANT_REQUIRED',
     });
+  });
+
+  it.each(['/api/metrics', '/api/db/health'])('limits %s to admin and ops roles', (path) => {
+    const cashierDecision = evaluateAuthorization({
+      method: 'GET', path, user: { id: 'usr-1', tenantId: 'TENANT-SA-01', roles: ['cashier'], attributes: {} },
+    } as any);
+    const opsDecision = evaluateAuthorization({
+      method: 'GET', path, user: { id: 'usr-2', tenantId: 'TENANT-SA-01', roles: ['ops'], attributes: {} },
+    } as any);
+
+    expect(cashierDecision.allowed).toBe(false);
+    expect(cashierDecision.reason).toBe('INSUFFICIENT_ROLE');
+    expect(opsDecision.allowed).toBe(true);
   });
 });

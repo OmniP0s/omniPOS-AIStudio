@@ -1,5 +1,5 @@
 export { authenticateApiRequest, isPublicApiRoute } from "./authentication";
-export { authorizeApiRequest } from "./authorization";
+export { authorizeApiRequest, evaluateAuthorization } from "./authorization";
 export { enforceTenantIsolation } from "./tenantIsolation";
 export { rateLimitApiRequests } from "./rateLimit";
 export { applySecurityHeaders, enforceCorsAllowlist } from "./httpSecurity";
