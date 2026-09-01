@@ -26,6 +26,20 @@ export class DuplicateJournalEntryError extends Error {
   }
 }
 
+export class NegativeAmountError extends Error {
+  constructor(entryNumber: string, lineId: string) {
+    super(`Journal entry ${entryNumber} contains a negative debit or credit on line ${lineId}.`);
+    this.name = 'NegativeAmountError';
+  }
+}
+
+export class MixedCurrencyError extends Error {
+  constructor(entryNumber: string) {
+    super(`Journal entry ${entryNumber} must use exactly one currency across all debit and credit amounts.`);
+    this.name = 'MixedCurrencyError';
+  }
+}
+
 export const DEFAULT_CHART_OF_ACCOUNTS: Omit<ChartOfAccountModel, 'tenantId'>[] = [
   // 1000 - ASSETS (Normal Balance: DEBIT)
   { id: 'coa-1010', code: '1010', nameEn: 'Cash on Hand (Drawers)', nameAr: 'النقدية في الصناديق', category: 'ASSET', subCategory: 'Current Assets', normalBalance: 'DEBIT', balance: Money.fromMajor(15000, 'SAR'), currency: 'SAR', isActive: true, isReconciled: true },
@@ -130,9 +144,22 @@ export class DoubleEntryEngine {
       throw new Error(`Journal entry ${entryNumber} must contain at least two lines.`);
     }
 
-    // 3. Verify Mathematical Balance: Total Debits == Total Credits
-    let totalDebit = Money.zero(lines[0].debit.currency);
-    let totalCredit = Money.zero(lines[0].credit.currency);
+    // 3. Validate signs and enforce one currency across every amount.
+    const currencies = new Set(lines.flatMap(line => [line.debit.currency, line.credit.currency]));
+    if (currencies.size !== 1) {
+      throw new MixedCurrencyError(entryNumber);
+    }
+
+    for (const line of lines) {
+      if (line.debit.isNegative() || line.credit.isNegative()) {
+        throw new NegativeAmountError(entryNumber, line.id);
+      }
+    }
+
+    // 4. Verify Mathematical Balance: Total Debits == Total Credits
+    const entryCurrency = lines[0].debit.currency;
+    let totalDebit = Money.zero(entryCurrency);
+    let totalCredit = Money.zero(entryCurrency);
 
     for (const line of lines) {
       totalDebit = totalDebit.add(line.debit);
@@ -147,13 +174,13 @@ export class DoubleEntryEngine {
       );
     }
 
-    // 4. Update Account Balances in Chart of Accounts
+    // 5. Compute every resulting account state without mutating the ledger.
+    const intendedAccounts = new Map<string, ChartOfAccountModel>();
     for (const line of lines) {
       const accKey = `${tenantId}:${line.accountCode}`;
-      let account = this.accounts.get(accKey);
+      let account = intendedAccounts.get(accKey) ?? this.accounts.get(accKey);
 
       if (!account) {
-        // Create account on demand if missing
         account = {
           id: `coa-${line.accountCode}-${tenantId}`,
           tenantId,
@@ -168,20 +195,15 @@ export class DoubleEntryEngine {
           isActive: true,
           isReconciled: true,
         };
-        this.accounts.set(accKey, account);
       }
 
-      // Calculate new balance based on Normal Balance
-      // DEBIT normal balance: increases with Debit, decreases with Credit
-      // CREDIT normal balance: increases with Credit, decreases with Debit
-      if (account.normalBalance === 'DEBIT') {
-        account.balance = account.balance.add(line.debit).subtract(line.credit);
-      } else {
-        account.balance = account.balance.add(line.credit).subtract(line.debit);
-      }
+      const balance = account.normalBalance === 'DEBIT'
+        ? account.balance.add(line.debit).subtract(line.credit)
+        : account.balance.add(line.credit).subtract(line.debit);
+      intendedAccounts.set(accKey, { ...account, balance });
     }
 
-    // 5. Store Posted Immutable Record
+    // 6. Prepare the posted record before committing any state changes.
     const journalEntryId = `je-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const postedEntry: JournalEntryModel = {
       ...entry,
@@ -190,6 +212,10 @@ export class DoubleEntryEngine {
       isReversed: false,
     };
 
+    // 7. Commit the prevalidated account states and journal indexes together.
+    for (const [accountKey, account] of intendedAccounts) {
+      this.accounts.set(accountKey, account);
+    }
     this.entries.set(journalEntryId, postedEntry);
     this.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, journalEntryId);
 
@@ -245,9 +271,12 @@ export class DoubleEntryEngine {
       lines: invertedLines,
     });
 
-    // Mark original as reversed
-    original.isReversed = true;
-    original.reversalEntryId = reversalEntry.id;
+    // Replace, rather than mutate, the original only after reversal posting succeeds.
+    this.entries.set(originalEntryId, {
+      ...original,
+      isReversed: true,
+      reversalEntryId: reversalEntry.id,
+    });
 
     return reversalEntry;
   }
