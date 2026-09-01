@@ -241,11 +241,10 @@ describe('ZATCA Phase 2 & Double-Entry Accounting Production-Readiness Suite', (
     });
 
     it('generates zero-variance Trial Balance on clean zero-state and after posted sales', () => {
-      // Create a fresh engine where accounts start with zero balance
+      // Create a fresh engine where every default account starts at zero.
       const cleanEngine = new DoubleEntryEngine('tenant-clean-01');
-      // Set all initial accounts to zero
       for (const acc of cleanEngine.getAccounts('tenant-clean-01')) {
-        acc.balance = Money.zero('SAR');
+        expect(acc.balance.isZero()).toBe(true);
       }
 
       const cleanPostings = new AccountingPostingsService(cleanEngine);
@@ -354,4 +353,3 @@ describe('ZATCA Phase 2 & Double-Entry Accounting Production-Readiness Suite', (
     });
   });
 });
-

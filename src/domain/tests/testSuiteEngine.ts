@@ -176,7 +176,21 @@ export async function runEnterpriseTestSuite(): Promise<TestCaseResult[]> {
 
   await addTest('UNIT', 'ZATCA 15% Standard VAT Calculation Formula', () => {
     const tenantId = 'tenant-enterprise-vat-test-suite';
-    const vatReturn = getAccountingServices(tenantId).reporting.generateZatcaVatReturn(tenantId, 'Q3 2026');
+    const accounting = getAccountingServices(tenantId);
+    accounting.postings.postOrderSale({
+      tenantId,
+      branchId: 'branch-01',
+      orderNumber: '#ORD-VAT-TEST',
+      orderId: 'ord-vat-test',
+      orderType: 'DINE_IN',
+      subtotal: Money.fromMajor(100),
+      discountAmount: Money.zero('SAR'),
+      taxableAmount: Money.fromMajor(100),
+      vatAmount: Money.fromMajor(15),
+      totalAmount: Money.fromMajor(115),
+      payments: [{ method: 'MADA', amount: Money.fromMajor(115) }],
+    });
+    const vatReturn = accounting.reporting.generateZatcaVatReturn(tenantId, 'Q3 2026');
     if (!vatReturn.standardRatedOutputVat.isPositive()) {
       throw new Error('VAT return output computation failed');
     }
