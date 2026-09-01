@@ -817,7 +817,7 @@ class PosStateManager {
   private inventoryRepo: EdgeInventoryRepository = new EdgeInventoryRepository(globalEdgeDatabase);
   private isEdgeStorageReady: boolean = false;
 
-  public accountingEngine: DoubleEntryEngine = new DoubleEntryEngine('tenant-sa-001');
+  public accountingEngine: DoubleEntryEngine = new DoubleEntryEngine(initialTenant.id);
   public accountingPostings: AccountingPostingsService = new AccountingPostingsService(this.accountingEngine);
   public financialReporting: FinancialReportingService = new FinancialReportingService(this.accountingEngine);
   public zatcaAdapter: ZatcaApiAdapter = new ZatcaApiAdapter();
