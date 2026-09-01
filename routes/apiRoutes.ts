@@ -6,6 +6,7 @@ import { cognitiveAiRouter } from "./cognitiveAiRoutes";
 import { platformRouter } from "./platformRoutes";
 import { syncRouter } from "./syncRoutes";
 import { zatcaRouter } from "./zatcaRoutes";
+import { enterpriseRouter } from "./enterpriseRoutes";
 
 export function registerApiRoutes(app: Express) {
   app.use("/api", platformRouter);
@@ -15,4 +16,5 @@ export function registerApiRoutes(app: Express) {
   app.use("/api/cognitive-ai", cognitiveAiRouter);
   app.use("/api/sync", syncRouter);
   app.use("/api/zatca", zatcaRouter);
+  app.use(enterpriseRouter);
 }

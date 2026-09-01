@@ -5,7 +5,6 @@ export function getHealthStatus() {
     status: "ok",
     version: "2.8.0-enterprise",
     environment: serverConfig.environment,
-    hasKey: Boolean(process.env.GEMINI_API_KEY),
     uptimeSeconds: Math.floor(process.uptime()),
   };
 }

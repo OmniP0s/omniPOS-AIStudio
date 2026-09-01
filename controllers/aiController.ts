@@ -82,7 +82,7 @@ export const postApiChat = async (req: Request, res: Response) => {
   // Enterprise AI Gateway Route
 export const postApiAiGatewayComplete = async (req: Request, res: Response) => {
     try {
-      const { messages, modelId = "gemini-3.7-flash", temperature = 0.4, tenantId = "TENANT-DEFAULT-01" } = req.body;
+      const { messages, modelId = "gemini-3.7-flash", temperature = 0.4 } = req.body;
       const ai = getAi();
       const selectedModel = modelId.startsWith("gemini") ? modelId : "gemini-3.7-flash";
 
