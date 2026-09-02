@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
+import { BRAND_CONFIG } from '../../config/brand';
 
 interface LoginScreenProps {
   isArabic: boolean;
   onLogin: (email: string, password: string) => void;
 }
-
-// Temporary support contact — will become dynamic in a later stage.
-const SUPPORT_PHONE = '+966 5X XXX XXXX';
-const SUPPORT_EMAIL = 'support@alphashadow.com';
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) => {
   const [email, setEmail] = useState('');
@@ -37,9 +34,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) =
 
         {/* Brand name */}
         <div className="text-center">
-          <h1 className="text-3xl font-black text-amber-400 tracking-wide">ALPHA SHADOW</h1>
+          <h1 className="text-3xl font-black text-amber-400 tracking-wide">{isArabic ? BRAND_CONFIG.nameAr : BRAND_CONFIG.nameEn}</h1>
           <p className="text-slate-400 text-sm mt-1">
-            {isArabic ? 'نظام نقاط البيع المتكامل' : 'The Elite POS Protocol'}
+            {isArabic ? BRAND_CONFIG.taglineAr : BRAND_CONFIG.taglineEn}
           </p>
         </div>
 
@@ -87,7 +84,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) =
             {isArabic ? 'تحتاج مساعدة؟ تواصل مع الدعم الفني' : 'Need help? Contact technical support'}
           </p>
           <p className="text-slate-400 text-xs" dir="ltr">
-            {SUPPORT_PHONE} · {SUPPORT_EMAIL}
+            {BRAND_CONFIG.supportPhone} · {BRAND_CONFIG.supportEmail}
           </p>
         </div>
       </form>
