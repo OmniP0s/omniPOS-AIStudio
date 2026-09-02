@@ -80,7 +80,8 @@ export type NavModule =
   | 'HARDWARE'
   | 'ADMIN'
   | 'TESTS'
-  | 'SETTINGS';
+  | 'SETTINGS'
+  | 'USER_MANAGEMENT';
 
 interface HeaderNavProps {
   tenant: TenantConfig;
@@ -166,6 +167,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
     { id: 'ADMIN', labelEn: 'Central Admin', labelAr: 'الإدارة المركزية', icon: Building2 },
     { id: 'TESTS', labelEn: 'Quality & Global Release', labelAr: 'منصة الجودة والإطلاق العالمي', icon: Award, badge: 'QA & GA' },
     { id: 'SETTINGS', labelEn: 'Settings', labelAr: 'الإعدادات', icon: Settings },
+    { id: 'USER_MANAGEMENT', labelEn: 'User Management', labelAr: 'إدارة المستخدمين', icon: Users },
   ];
 
   return (

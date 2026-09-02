@@ -19,6 +19,7 @@ import { ZatcaComplianceView } from './components/zatca/ZatcaComplianceView';
 import { AnalyticsDashboard } from './components/analytics/AnalyticsDashboard';
 import { HardwareManager } from './components/hardware/HardwareManager';
 import { SettingsView } from './components/settings/SettingsView';
+import { UserManagementView } from './components/admin/UserManagementView';
 import { ProcurementView } from './components/procurement/ProcurementView';
 import { CentralKitchenView } from './components/kitchen/CentralKitchenView';
 import { DeliveryFleetView } from './components/delivery/DeliveryFleetView';
@@ -401,6 +402,12 @@ export default function App() {
             isArabic={isArabic}
             onUpdateTenant={t => {}}
             onToggleLanguage={() => setIsArabic(!isArabic)}
+          />
+        )}
+        {activeModule === 'USER_MANAGEMENT' && (
+          <UserManagementView
+            isArabic={isArabic}
+            activeUser={storeState.activeUser}
           />
         )}
       </main>
