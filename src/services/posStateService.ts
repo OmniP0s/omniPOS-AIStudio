@@ -1,4 +1,5 @@
 // Enterprise POS State & Store Management Service
+import { hasAction } from '../config/permissions';
 import {
   TenantConfig,
   MenuItem,
@@ -1278,6 +1279,16 @@ class PosStateManager {
 
   // Refund Order & Issue ZATCA Credit Note with Double-Entry Accounting
   public async refundOrder(orderId: string, reason: string, refundMethod: 'CASH' | 'MADA' | 'VISA' | 'WALLET' = 'CASH'): Promise<Order> {
+    // حماية: مين مسموح له بالمرتجع/الإلغاء (المالك والمدير فقط)
+    if (!this.activeUser || !hasAction(this.activeUser.role, 'canVoidInvoice')) {
+      this.addAuditLog(
+        'REFUND_DENIED',
+        'SECURITY',
+        `Refund denied for order ${orderId} — user ${this.activeUser?.name || 'unknown'} (${this.activeUser?.role || 'no-role'}) lacks canVoidInvoice.`
+      );
+      throw new Error('غير مصرّح: هذا المستخدم لا يملك صلاحية استرجاع/إلغاء الفواتير');
+    }
+
     const order = this.orders.find(o => o.id === orderId);
     if (!order) throw new Error('Order not found');
 
