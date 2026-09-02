@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { posStore } from './services/posStateService';
 import { HeaderNav, NavModule } from './components/layout/HeaderNav';
-import { firstAllowedNav } from './config/permissions';
+import { firstAllowedNav, hasAction } from './config/permissions';
 import { POSLayout } from './components/pos/POSLayout';
 import { TableFloorPlan } from './components/tables/TableFloorPlan';
 import { KitchenDisplaySystem } from './components/kds/KitchenDisplaySystem';
@@ -214,6 +214,7 @@ export default function App() {
             activeOrder={storeState.activeOrder}
             currency={currency}
             isArabic={isArabic}
+            canApplyDiscount={hasAction(storeState.activeUser.role, 'canApplyDiscount')}
             onSaveOrder={handleSaveOrder}
             onProcessPayment={handleProcessPayment}
             onSelectTable={handleSelectTableAndSwitchToPOS}

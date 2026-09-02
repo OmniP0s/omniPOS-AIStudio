@@ -52,6 +52,7 @@ interface POSLayoutProps {
   activeOrder: Order | null;
   currency: string;
   isArabic: boolean;
+  canApplyDiscount: boolean;
   onSaveOrder: (order: Order) => void;
   onProcessPayment: (
     orderId: string,
@@ -75,6 +76,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
   activeOrder,
   currency,
   isArabic,
+  canApplyDiscount,
   onSaveOrder,
   onProcessPayment,
 }) => {
@@ -594,21 +596,27 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
               <Percent className="w-3.5 h-3.5 text-indigo-500" />
               {isArabic ? 'خصم سريع:' : 'Discount:'}
             </span>
-            <div className="flex items-center gap-1">
-              {[0, 5, 10, 15, 20].map(pct => (
-                <button
-                  key={pct}
-                  onClick={() => setDiscountPercent(pct)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                    discountPercent === pct
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  {pct === 0 ? (isArabic ? 'بدون' : '0%') : `${pct}%`}
-                </button>
-              ))}
-            </div>
+            {canApplyDiscount ? (
+              <div className="flex items-center gap-1">
+                {[0, 5, 10, 15, 20].map(pct => (
+                  <button
+                    key={pct}
+                    onClick={() => setDiscountPercent(pct)}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                      discountPercent === pct
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {pct === 0 ? (isArabic ? 'بدون' : '0%') : `${pct}%`}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                {isArabic ? 'الخصم يتطلب صلاحية مدير' : 'Discount requires manager'}
+              </span>
+            )}
           </div>
 
           {/* Breakdown */}
