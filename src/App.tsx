@@ -318,6 +318,7 @@ export default function App() {
           <AccountingLedgerView
             isArabic={isArabic}
             activeUser={storeState.activeUser}
+            tenantId={storeState.tenant.id}
           />
         )}
 
