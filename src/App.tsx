@@ -147,7 +147,10 @@ export default function App() {
     return (
       <LoginScreen
         isArabic={isArabic}
-        onLogin={() => setIsLoggedIn(true)}
+        onLogin={user => {
+          posStore.setActiveUser(user);
+          setIsLoggedIn(true);
+        }}
       />
     );
   }
@@ -401,4 +404,3 @@ export default function App() {
     </div>
   );
 }
-

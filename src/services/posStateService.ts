@@ -933,6 +933,11 @@ class PosStateManager {
     this.listeners.forEach(fn => fn(state));
   }
 
+  // تحديث المستخدم النشط بعد تسجيل الدخول
+  public setActiveUser(user: User): void {
+    this.activeUser = user;
+    this.notify();
+  }
 
   // Getters
   public getTenant(): TenantConfig { return this.tenant; }

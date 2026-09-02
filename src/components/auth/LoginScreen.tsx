@@ -1,18 +1,45 @@
 import React, { useState } from 'react';
 import { BRAND_CONFIG } from '../../config/brand';
+import type { User } from '../../types';
+import { authenticateByEmail, authenticateByPin } from '../../config/users.seed';
 
 interface LoginScreenProps {
   isArabic: boolean;
-  onLogin: (email: string, password: string) => void;
+  onLogin: (user: User) => void;
 }
 
+type LoginMode = 'EMAIL' | 'PIN';
+
 export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) => {
+  const [mode, setMode] = useState<LoginMode>('EMAIL');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(email, password);
+    setError('');
+
+    const result =
+      mode === 'EMAIL'
+        ? authenticateByEmail(email, password)
+        : authenticateByPin(pin);
+
+    if (result.ok) {
+      onLogin(result.user);
+    } else {
+      setError(
+        isArabic
+          ? 'بيانات الدخول غير صحيحة. حاول مرة أخرى.'
+          : 'Invalid credentials. Please try again.'
+      );
+    }
+  };
+
+  const selectMode = (nextMode: LoginMode) => {
+    setMode(nextMode);
+    setError('');
   };
 
   return (
@@ -36,41 +63,96 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) =
 
         {/* Brand name */}
         <div className="text-center">
-          <h1 className="text-3xl font-black text-amber-400 tracking-wide">{isArabic ? BRAND_CONFIG.nameAr : BRAND_CONFIG.nameEn}</h1>
+          <h1 className="text-3xl font-black text-amber-400 tracking-wide">
+            {isArabic ? BRAND_CONFIG.nameAr : BRAND_CONFIG.nameEn}
+          </h1>
           <p className="text-slate-400 text-sm mt-1">
             {isArabic ? BRAND_CONFIG.taglineAr : BRAND_CONFIG.taglineEn}
           </p>
         </div>
 
-        {/* Email */}
-        <div className="w-full flex flex-col gap-2">
-          <label className="text-slate-300 text-sm font-semibold">
-            {isArabic ? 'البريد الإلكتروني' : 'Email'}
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            placeholder={isArabic ? 'أدخل بريدك الإلكتروني' : 'Enter your email'}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
-          />
+        {/* Mode tabs */}
+        <div className="grid grid-cols-2 gap-2 w-full rounded-xl bg-slate-800 p-1">
+          <button
+            type="button"
+            onClick={() => selectMode('EMAIL')}
+            className={`py-2 rounded-lg text-sm font-semibold transition ${
+              mode === 'EMAIL'
+                ? 'bg-amber-500 text-slate-950'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {isArabic ? 'إيميل وكلمة مرور' : 'Email & Password'}
+          </button>
+          <button
+            type="button"
+            onClick={() => selectMode('PIN')}
+            className={`py-2 rounded-lg text-sm font-semibold transition ${
+              mode === 'PIN'
+                ? 'bg-amber-500 text-slate-950'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {isArabic ? 'رقم سري (PIN)' : 'PIN'}
+          </button>
         </div>
 
-        {/* Password */}
-        <div className="w-full flex flex-col gap-2">
-          <label className="text-slate-300 text-sm font-semibold">
-            {isArabic ? 'كلمة المرور' : 'Password'}
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            placeholder={isArabic ? 'أدخل كلمة المرور' : 'Enter your password'}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
-          />
-        </div>
+        {mode === 'EMAIL' ? (
+          <div className="w-full flex flex-col gap-4">
+            {/* Email */}
+            <div className="w-full flex flex-col gap-2">
+              <label className="text-slate-300 text-sm font-semibold">
+                {isArabic ? 'البريد الإلكتروني' : 'Email'}
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                placeholder={isArabic ? 'أدخل بريدك الإلكتروني' : 'Enter your email'}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+
+            {/* Password */}
+            <div className="w-full flex flex-col gap-2">
+              <label className="text-slate-300 text-sm font-semibold">
+                {isArabic ? 'كلمة المرور' : 'Password'}
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                placeholder={isArabic ? 'أدخل كلمة المرور' : 'Enter your password'}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+          </div>
+        ) : (
+          /* PIN */
+          <div className="w-full flex flex-col gap-2">
+            <label className="text-slate-300 text-sm font-semibold">
+              {isArabic ? 'الرقم السري' : 'PIN'}
+            </label>
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              required
+              placeholder={isArabic ? 'أدخل الرقم السري' : 'Enter your PIN'}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition text-center tracking-[0.5em] text-lg"
+            />
+          </div>
+        )}
+
+        {/* Error message */}
+        {error && (
+          <p role="alert" className="w-full text-center text-sm text-red-400">
+            {error}
+          </p>
+        )}
 
         {/* Submit */}
         <button
