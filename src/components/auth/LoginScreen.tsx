@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BRAND_CONFIG } from '../../config/brand';
 import type { User } from '../../types';
-import { authenticateByEmail, authenticateByPin } from '../../config/users.seed';
+import { authenticateByEmail, authenticateByPin } from '../../services/userService';
 
 interface LoginScreenProps {
   isArabic: boolean;
