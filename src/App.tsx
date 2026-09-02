@@ -313,7 +313,7 @@ export default function App() {
           />
         )}
 
-        {activeModule === 'ACCOUNTING' && (
+        {activeModule === 'ACCOUNTING' && hasAction(storeState.activeUser.role, 'canViewReports') && (
           <AccountingLedgerView
             isArabic={isArabic}
             activeUser={storeState.activeUser}
@@ -352,7 +352,7 @@ export default function App() {
           />
         )}
 
-        {activeModule === 'ANALYTICS' && (
+        {activeModule === 'ANALYTICS' && hasAction(storeState.activeUser.role, 'canViewReports') && (
           <AnalyticsDashboard
             tenant={storeState.tenant}
             orders={storeState.orders}
