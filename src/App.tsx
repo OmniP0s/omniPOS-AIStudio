@@ -36,12 +36,14 @@ import { AiAutonomousAgentsCenter } from './components/ai/AiAutonomousAgentsCent
 import { AiCognitiveMultimodalCenter } from './components/ai/AiCognitiveMultimodalCenter';
 import { EnterpriseSaaSPlatformCenter } from './components/saas/EnterpriseSaaSPlatformCenter';
 import { DiningTable, Order, OrderItem, Branch } from './types';
+import { LoginScreen } from './components/auth/LoginScreen';
 
 export default function App() {
   const [storeState, setStoreState] = useState(() => posStore.getState());
   const [activeModule, setActiveModule] = useState<NavModule>('POS');
   const [isArabic, setIsArabic] = useState<boolean>(true);
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Subscribe to posStore changes
   useEffect(() => {
@@ -140,6 +142,15 @@ export default function App() {
   };
 
   const currency = storeState.tenant.currency || 'SAR';
+
+  if (!isLoggedIn) {
+    return (
+      <LoginScreen
+        isArabic={isArabic}
+        onLogin={() => setIsLoggedIn(true)}
+      />
+    );
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-100 dark:bg-slate-950 font-sans selection:bg-indigo-500 selection:text-white">
