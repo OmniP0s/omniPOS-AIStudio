@@ -1332,6 +1332,16 @@ class PosStateManager {
 
   // Inventory Management Actions
   public adjustStock(inventoryItemId: string, warehouseId: string, newQuantity: number, reason: string) {
+    // حماية: مين مسموح له بتعديل المخزون (المالك والمدير ومدير المخزون فقط)
+    if (!this.activeUser || !hasAction(this.activeUser.role, 'canManageInventory')) {
+      this.addAuditLog(
+        'STOCK_ADJUST_DENIED',
+        'SECURITY',
+        `Stock adjust denied for item ${inventoryItemId} — user ${this.activeUser?.name || 'unknown'} (${this.activeUser?.role || 'no-role'}) lacks canManageInventory.`
+      );
+      throw new Error('غير مصرّح: هذا المستخدم لا يملك صلاحية تعديل المخزون');
+    }
+
     const item = this.inventoryItems.find(i => i.id === inventoryItemId);
     if (!item) return;
 
