@@ -5,6 +5,46 @@ import type { User } from '../types';
 export type UserRole = User['role'];
 // 'SUPER_ADMIN' | 'BRANCH_MANAGER' | 'CASHIER' | 'CHEF' | 'WAITER' | 'INVENTORY_MANAGER'
 
+// ============================================================
+// خريطة التنقل حسب الدور (بأسماء NavModule الحقيقية)
+// ============================================================
+
+// كل شاشات النظام (34) — للمالك
+const ALL_NAV_MODULES = [
+  'V2_OPERATIONS', 'SAAS_PLATFORM', 'COGNITIVE_AI', 'AI_AGENTS', 'AI_APPS',
+  'AI_FOUNDATION', 'SPRINT1_FOUNDATION', 'RUNTIME_OPS', 'POS', 'FLOOR_PLAN',
+  'KDS', 'SHIFTS', 'MENU', 'INVENTORY', 'PROCUREMENT', 'CUSTOMERS', 'DELIVERY',
+  'CENTRAL_KITCHEN', 'FRANCHISE', 'HR', 'ACCOUNTING', 'WORKFLOW', 'AI_SERVICES',
+  'INTEGRATIONS', 'SAAS_BILLING', 'DISASTER_RECOVERY', 'PRODUCTION', 'ZATCA',
+  'ANALYTICS', 'SECURITY', 'HARDWARE', 'ADMIN', 'TESTS', 'SETTINGS',
+] as const;
+
+// أي شاشات يشوفها كل دور في القائمة
+export const ROLE_NAV_MODULES: Record<UserRole, readonly string[]> = {
+  SUPER_ADMIN: ALL_NAV_MODULES,
+  BRANCH_MANAGER: [
+    'POS', 'FLOOR_PLAN', 'KDS', 'SHIFTS', 'MENU', 'INVENTORY', 'PROCUREMENT',
+    'CUSTOMERS', 'DELIVERY', 'HR', 'ACCOUNTING', 'ANALYTICS', 'ZATCA', 'SETTINGS',
+  ],
+  CASHIER: ['POS', 'FLOOR_PLAN', 'SHIFTS'],
+  CHEF: ['KDS'],
+  WAITER: ['FLOOR_PLAN', 'POS'],
+  INVENTORY_MANAGER: ['INVENTORY', 'PROCUREMENT', 'CENTRAL_KITCHEN', 'ANALYTICS'],
+};
+
+// هل الدور ده يقدر يوصل للشاشة دي؟ (بأسماء NavModule)
+export function canAccessNav(role: UserRole, moduleId: string): boolean {
+  const allowed = ROLE_NAV_MODULES[role];
+  if (!allowed) return false;
+  return allowed.includes(moduleId);
+}
+
+// أول شاشة مسموحة للدور (نبدأ عندها بعد الدخول)
+export function firstAllowedNav(role: UserRole): string {
+  const allowed = ROLE_NAV_MODULES[role];
+  return allowed && allowed.length > 0 ? allowed[0] : 'POS';
+}
+
 // الأفعال الحساسة اللي بنتحكم فيها بالدور
 export interface RoleActions {
   canVoidInvoice: boolean;      // إلغاء/تعديل فاتورة

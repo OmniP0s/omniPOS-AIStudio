@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TenantConfig, Branch, User } from '../../types';
+import { canAccessNav } from '../../config/permissions';
 import { outboxManager } from '../../domain/crdt/outboxSync';
 import {
   Store,
@@ -270,7 +271,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
       {/* Main Module Tabs Bar */}
       <div className="px-4 flex items-center gap-1 overflow-x-auto scrollbar-none py-1 bg-slate-950/60">
-        {navItems.map(item => {
+        {navItems.filter(item => canAccessNav(activeUser.role, item.id)).map(item => {
           const Icon = item.icon;
           const isActive = activeModule === item.id;
           return (
