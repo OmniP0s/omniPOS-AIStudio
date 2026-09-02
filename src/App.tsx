@@ -216,6 +216,7 @@ export default function App() {
             currency={currency}
             isArabic={isArabic}
             canApplyDiscount={hasAction(storeState.activeUser.role, 'canApplyDiscount')}
+            canClearCart={hasAction(storeState.activeUser.role, 'canVoidInvoice')}
             onSaveOrder={handleSaveOrder}
             onProcessPayment={handleProcessPayment}
             onSelectTable={handleSelectTableAndSwitchToPOS}

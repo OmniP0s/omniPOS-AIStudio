@@ -53,6 +53,7 @@ interface POSLayoutProps {
   currency: string;
   isArabic: boolean;
   canApplyDiscount: boolean;
+  canClearCart: boolean;
   onSaveOrder: (order: Order) => void;
   onProcessPayment: (
     orderId: string,
@@ -77,6 +78,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
   currency,
   isArabic,
   canApplyDiscount,
+  canClearCart,
   onSaveOrder,
   onProcessPayment,
 }) => {
@@ -460,7 +462,7 @@ export const POSLayout: React.FC<POSLayoutProps> = ({
             </div>
 
             {/* Clear Cart Button */}
-            {currentOrderItems.length > 0 && (
+            {currentOrderItems.length > 0 && canClearCart && (
               <button
                 onClick={() => setCurrentOrderItems([])}
                 className="text-xs text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1"
