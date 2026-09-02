@@ -27,10 +27,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ isArabic, onLogin }) =
         onSubmit={handleSubmit}
         className="relative z-10 w-full max-w-md bg-slate-900/80 backdrop-blur border border-slate-800 rounded-3xl shadow-2xl p-8 flex flex-col items-center gap-6"
       >
-        {/* Logo placeholder — replace with real Alpha Shadow logo later */}
-        <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg">
-          <span className="text-slate-950 text-4xl font-black">A</span>
-        </div>
+        {/* Alpha Shadow eagle logo */}
+        <img
+          src="/logo.png"
+          alt="Alpha Shadow eagle logo"
+          className="w-32 h-32 object-contain drop-shadow-2xl"
+        />
 
         {/* Brand name */}
         <div className="text-center">
