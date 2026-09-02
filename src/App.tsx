@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { posStore } from './services/posStateService';
 import { HeaderNav, NavModule } from './components/layout/HeaderNav';
+import { firstAllowedNav } from './config/permissions';
 import { POSLayout } from './components/pos/POSLayout';
 import { TableFloorPlan } from './components/tables/TableFloorPlan';
 import { KitchenDisplaySystem } from './components/kds/KitchenDisplaySystem';
@@ -149,6 +150,7 @@ export default function App() {
         isArabic={isArabic}
         onLogin={user => {
           posStore.setActiveUser(user);
+          setActiveModule(firstAllowedNav(user.role) as NavModule);
           setIsLoggedIn(true);
         }}
       />
