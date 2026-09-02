@@ -1251,6 +1251,16 @@ class PosStateManager {
   }
 
   public closeShift(actualCash: number): Shift {
+    // حماية: مين مسموح له بإغلاق الوردية (المالك والمدير فقط)
+    if (!this.activeUser || !hasAction(this.activeUser.role, 'canCloseShift')) {
+      this.addAuditLog(
+        'SHIFT_CLOSE_DENIED',
+        'SECURITY',
+        `Shift close denied — user ${this.activeUser?.name || 'unknown'} (${this.activeUser?.role || 'no-role'}) lacks canCloseShift.`
+      );
+      throw new Error('غير مصرّح: هذا المستخدم لا يملك صلاحية إغلاق الوردية');
+    }
+
     this.shift.actualCashCounted = actualCash;
     this.shift.cashDifference = actualCash - this.shift.expectedCash;
     this.shift.endTime = new Date().toISOString();
