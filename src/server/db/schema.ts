@@ -347,6 +347,104 @@ CREATE POLICY tenant_isolation_jl ON journal_lines
   WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), ''));
 `;
 
+export const AUTH_IDENTITY_SCHEMA_SQL = `
+-- 16. Auth Identity: Tenant-Scoped Users Table
+-- Credential columns (password_hash / pin_hash) and the operational lockout/audit
+-- columns are deliberately separated so that section 19 can grant the login role
+-- column-level SELECT on the authentication subset only.
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(64) PRIMARY KEY,
+  tenant_id VARCHAR(64) NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  password_hash TEXT,
+  pin_hash TEXT,
+  roles TEXT[] NOT NULL,
+  branch_id VARCHAR(64) NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  failed_login_attempts INT NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  password_updated_at TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_tenant_user_email UNIQUE (tenant_id, email),
+  CONSTRAINT ck_users_has_credential CHECK (password_hash IS NOT NULL OR pin_hash IS NOT NULL),
+  CONSTRAINT ck_users_has_role CHECK (cardinality(roles) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_pin_active ON users(tenant_id, is_active) WHERE pin_hash IS NOT NULL;
+
+-- 17. Case-Insensitive Per-Tenant Email Uniqueness Guard
+-- Application code normalizes with trim().toLowerCase(); this index enforces the same
+-- invariant at the database level so no other write path can bypass it.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_tenant_email_lower ON users(tenant_id, lower(email));
+
+-- 18. Row-Level Security Enforcement for Users
+-- FORCE is applied to this table only (tables from migrations 001/002 keep their existing
+-- ENABLE-only behaviour). With FORCE, RLS constrains even the table owner, so no connection
+-- can bypass tenant isolation on the credential table. Any write path against users must
+-- therefore set app.current_tenant_id first.
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation_users ON users;
+CREATE POLICY tenant_isolation_users ON users
+  FOR ALL
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), ''))
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), ''));
+
+-- 19. Least-Privilege Login Role (NOLOGIN group role, reached only via SET LOCAL ROLE)
+-- CREATE ROLE has no IF NOT EXISTS form, so existence is guarded explicitly.
+-- A missing CREATEROLE privilege is common on managed PostgreSQL (RDS / Cloud SQL / Azure),
+-- so the failure is re-raised with an actionable message instead of a bare PostgreSQL error.
+DO $$
+DECLARE
+  v_pg_error TEXT;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_login') THEN
+    BEGIN
+      EXECUTE 'CREATE ROLE app_login NOLOGIN';
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        v_pg_error := SQLERRM;
+        RAISE EXCEPTION
+          'omniPOS migration 20260830_003_auth_identity_schema failed while creating the "app_login" role: the migration role "%" does not have the CREATEROLE privilege that CREATE ROLE requires. PostgreSQL reported: %. Remediation: grant it once with ALTER ROLE % CREATEROLE; then re-run the migration.',
+          CURRENT_USER, v_pg_error, CURRENT_USER
+          USING ERRCODE = 'insufficient_privilege';
+    END;
+  END IF;
+END
+$$;
+
+-- 20. Role Membership Grant (required before any SET LOCAL ROLE app_login can succeed)
+DO $$
+DECLARE
+  v_pg_error TEXT;
+BEGIN
+  BEGIN
+    EXECUTE format('GRANT app_login TO %I', CURRENT_USER);
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      v_pg_error := SQLERRM;
+      RAISE EXCEPTION
+        'omniPOS migration 20260830_003_auth_identity_schema failed while granting the "app_login" role to "%": this requires CREATEROLE together with ADMIN OPTION on "app_login". PostgreSQL reported: %. Remediation: run the migration as the role that created "app_login", or grant ADMIN OPTION explicitly, then re-run the migration.',
+        CURRENT_USER, v_pg_error
+        USING ERRCODE = 'insufficient_privilege';
+  END;
+END
+$$;
+
+-- 21. Least-Privilege Column Grants for the Login Role
+-- app_login receives SELECT on the authentication subset only. It has no visibility into
+-- failed_login_attempts, locked_until, password_updated_at or last_login_at, and holds no
+-- INSERT / UPDATE / DELETE privilege, so a compromised login path cannot mutate credentials.
+REVOKE ALL ON users FROM PUBLIC;
+REVOKE ALL ON users FROM app_login;
+GRANT USAGE ON SCHEMA public TO app_login;
+GRANT SELECT (id, tenant_id, email, password_hash, pin_hash, roles, branch_id, is_active) ON users TO app_login;
+`;
+
 export interface MigrationStep {
   version: string;
   description: string;
@@ -363,6 +461,11 @@ export const MIGRATIONS: MigrationStep[] = [
     version: '20260830_002_zatca_accounting_schema',
     description: 'Create ZATCA Phase 2 invoices, Chart of Accounts, and immutable Double-Entry General Ledger tables with RLS',
     sql: ZATCA_ACCOUNTING_SCHEMA_SQL,
+  },
+  {
+    version: '20260830_003_auth_identity_schema',
+    description: 'Create tenant-scoped users table with per-tenant email uniqueness, forced RLS isolation, and least-privilege app_login role',
+    sql: AUTH_IDENTITY_SCHEMA_SQL,
   },
 ];
 
