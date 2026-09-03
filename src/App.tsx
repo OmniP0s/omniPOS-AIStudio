@@ -37,6 +37,7 @@ import { AiEnterpriseApplicationsCenter } from './components/ai/AiEnterpriseAppl
 import { AiAutonomousAgentsCenter } from './components/ai/AiAutonomousAgentsCenter';
 import { AiCognitiveMultimodalCenter } from './components/ai/AiCognitiveMultimodalCenter';
 import { EnterpriseSaaSPlatformCenter } from './components/saas/EnterpriseSaaSPlatformCenter';
+import { EnterpriseOperationsV2Center } from './components/enterprise_ops/EnterpriseOperationsV2Center';
 import { DiningTable, Order, OrderItem, Branch } from './types';
 import { LoginScreen } from './components/auth/LoginScreen';
 
