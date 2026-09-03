@@ -177,6 +177,9 @@ export default function App() {
 
       {/* Main Active Module Screen */}
       <main className="flex-1 flex overflow-hidden">
+        {activeModule === 'V2_OPERATIONS' && (
+          <EnterpriseOperationsV2Center isArabic={isArabic} />
+        )}
         {activeModule === 'SAAS_PLATFORM' && (
           <EnterpriseSaaSPlatformCenter isArabic={isArabic} />
         )}
